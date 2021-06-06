@@ -1,0 +1,22 @@
+[package]
+name = "packtool"
+version = "0.1.0"
+authors = ["Nicolas Di Prima <nicolas@primetype.co.uk>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hex = "0.4.3"
+packtool-macro = { path = "./packtool-macro", version = "0.1.0" }
+anyhow = "1.0.40"
+
+# be kind with crates.io and only compile the doc once
+# there's no difference based on the architecture anyway
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[workspace]
+members = [
+    "packtool-macro"
+]
