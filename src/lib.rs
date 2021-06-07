@@ -22,10 +22,6 @@ use packtool::Packed;
 #[packed(value = "my protocol")]
 pub struct ProtocolPrefix;
 
-#[derive(Packed)]
-#[packed(value = b"raw bytes")]
-pub enum EnumUnit {}
-
 /// a unit that is always `4` and takes 1 byte long
 #[derive(Packed)]
 #[packed(value = 0b0000_0100u8)]
@@ -38,7 +34,6 @@ pub struct OtherUnit();
 pub struct LastButNotLeast {}
 
 # assert_eq!(ProtocolPrefix::SIZE, 11);
-# assert_eq!(EnumUnit::SIZE, 9);
 # assert_eq!(OtherUnit::SIZE, 1);
 # assert_eq!(LastButNotLeast::SIZE, 4);
 ```
@@ -122,7 +117,7 @@ mod view;
 use std::convert::TryInto;
 
 pub use self::view::View;
-pub use anyhow::{ensure, Context, Result};
+pub use anyhow::{anyhow, ensure, Context, Result};
 pub use packtool_macro::Packed;
 
 pub trait Packed: Sized {
@@ -138,9 +133,7 @@ pub trait Packed: Sized {
     /// it should be assumed the `checks` have been performed
     /// appropriately since we are passing in the [`View`]
     /// and not the raw slice.
-    fn unchecked_read_from_slice(view: View<'_, Self>) -> Self {
-        todo!()
-    }
+    fn unchecked_read_from_slice(view: View<'_, Self>) -> Self;
 
     /// check the validity of the given slice to hold the appropriate value
     ///

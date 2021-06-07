@@ -1,6 +1,16 @@
 use packtool::{Packed, View};
 
 #[derive(Packed)]
+#[packed(value = 1u8)]
+struct StructTupleUnit();
+const STRUCT_TUPLE_UNIT_SLICE: &[u8] = &[1];
+
+#[derive(Packed)]
+#[packed(value = 1u8)]
+struct StructBraceUnit {}
+const STRUCT_BRACE_UNIT_SLICE: &[u8] = &[1];
+
+#[derive(Packed)]
 #[packed(value = "string")]
 pub struct TagString;
 const STRING_SLICE: &[u8] = b"string";
@@ -86,7 +96,8 @@ const INVALID_SLICE: &[u8] = b"invalid slice of random length";
 
 macro_rules! internal_mk_test {
     ($Type:ty, $SLICE:ident) => {{
-        let _tag = View::<$Type>::try_from_slice($SLICE).unwrap();
+        let tag = View::<$Type>::try_from_slice($SLICE).unwrap();
+        let _value: $Type = tag.into();
     }};
     ($Type:ty, ! $SLICE:ident) => {{
         let _err = View::<$Type>::try_from_slice($SLICE).unwrap_err();
@@ -110,6 +121,15 @@ macro_rules! mk_test {
         }
     };
 }
+
+mk_test!(struct_tuple_unit<StructTupleUnit>(
+    [STRUCT_TUPLE_UNIT_SLICE],
+    [!INVALID_SLICE]
+));
+mk_test!(struct_brace_unit<StructBraceUnit>(
+    [STRUCT_BRACE_UNIT_SLICE],
+    [!INVALID_SLICE]
+));
 
 mk_test!(string<TagString>(
     [STRING_SLICE],

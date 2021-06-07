@@ -13,5 +13,5 @@ pub use self::{
     packed_field::PackedField,
     packed_structure::PackedStruct,
     packed_tuple::PackedTuple,
-    packed_unit::PackedUnit,
+    packed_unit::{PackedUnit, PackedUnitOrigin},
 };

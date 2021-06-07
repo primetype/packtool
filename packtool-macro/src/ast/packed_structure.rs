@@ -1,4 +1,4 @@
-use crate::ast::{PackedField, PackedUnit};
+use crate::ast::{PackedField, PackedUnit, PackedUnitOrigin};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -30,6 +30,7 @@ impl PackedStruct {
             _struct_token: self._struct_token,
             ident: self.ident,
             _semi: syn::token::Semi::default(),
+            from: PackedUnitOrigin::Brace,
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::ast::{PackedAttributes, PackedField, PackedUnit};
+use crate::ast::{PackedAttributes, PackedField};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -30,18 +30,6 @@ impl PackedEnum {
 
     pub fn equivalent_to_packed_unit(&self) -> bool {
         self.variants.is_empty()
-    }
-
-    /// function will panic if it is not a valid equivalence to
-    /// a [`PackedUnit`]
-    pub fn into_unit(self) -> PackedUnit {
-        assert!(self.variants.is_empty(), "Unit structure have no fields");
-
-        PackedUnit {
-            _struct_token: syn::token::Struct::default(),
-            ident: self.ident,
-            _semi: syn::token::Semi::default(),
-        }
     }
 }
 
@@ -89,6 +77,7 @@ impl Parse for PackedVariant {
         };
 
         if discriminant.is_none() && attributes.value.is_some() {
+            dbg!(discriminant.is_none(), attributes.value.is_some());
             todo!()
         }
 

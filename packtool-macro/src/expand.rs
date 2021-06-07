@@ -4,7 +4,7 @@ use syn::Result;
 
 use crate::ast::{
     Container, Data, PackedAttributes, PackedEnum, PackedField, PackedStruct, PackedTuple,
-    PackedVariant,
+    PackedUnitOrigin, PackedVariant,
 };
 
 pub fn packed_definitions(container: Container) -> TokenStream {
@@ -16,10 +16,13 @@ pub fn packed_definitions(container: Container) -> TokenStream {
 
     let size = expand_size(&container);
     let check = expand_check(&container);
+    let unchecked_read_from_slice = expand_read_from_slice(&container);
 
     quote! {
         impl Packed for #ident {
             const SIZE: usize = #size;
+
+            #unchecked_read_from_slice
 
             #check
         }
@@ -345,20 +348,41 @@ where
     quote! { #(#checks)* }
 }
 
-fn expand_check_data_variants<'a, I>(fields: I) -> TokenStream
+fn expand_check_data_variants<'a, I>(repr: &syn::Path, variants: I) -> TokenStream
 where
     I: IntoIterator<Item = &'a PackedVariant>,
 {
-    let mut checks = Vec::new();
+    let mut discriminants = Vec::new();
 
-    let mut start = quote! { 0 };
-    for (index, field) in fields.into_iter().enumerate() {
-        let (check, end) = expand_check_data_variant(field, index, start.clone());
-        checks.push(check);
-        start = end;
+    for variant in variants.into_iter() {
+        let discriminant = if let Some(discriminant) = variant.discriminant.as_ref() {
+            discriminant
+        } else {
+            panic!("should always be a discriminant")
+        };
+        discriminants.push(&discriminant.1);
     }
 
-    quote! { #(#checks)* }
+    let value = if repr.is_ident("u8") {
+        quote! { slice[0] }
+    } else if repr.is_ident("i8") {
+        quote! { slice[0] as i8 }
+    } else {
+        quote! {
+            <#repr>::from_le_bytes(
+                slice.try_into().unwrap()
+            )
+        }
+    };
+
+    quote! {
+        match #value {
+            # ( #discriminants )|* => {
+                ()
+            }
+            _ => return Err(::packtool::anyhow!("Invalid discriminant")),
+        }
+    }
 }
 
 fn expand_check_data_tuple(tuple: &PackedTuple) -> TokenStream {
@@ -390,8 +414,8 @@ fn expand_check_data_structure(structure: &PackedStruct) -> TokenStream {
     }
 }
 
-fn expand_check_data_enumeration(ident: &syn::Ident, enumeration: &PackedEnum) -> TokenStream {
-    let variants = expand_check_data_variants(&enumeration.variants);
+fn expand_check_data_enumeration(repr: &syn::Path, enumeration: &PackedEnum) -> TokenStream {
+    let variants = expand_check_data_variants(repr, &enumeration.variants);
 
     quote! {
         fn check(slice: &[u8]) -> ::packtool::Result<()> {
@@ -417,6 +441,105 @@ fn expand_check(container: &Container) -> TokenStream {
         ),
         Data::Tuple(tuple) => expand_check_data_tuple(tuple),
         Data::Struct(structure) => expand_check_data_structure(structure),
-        Data::Enum(enumeration) => expand_check_data_enumeration(container.ident(), enumeration),
+        Data::Enum(enumeration) => expand_check_data_enumeration(
+            container
+                .attributes
+                .repr
+                .as_ref()
+                .expect("Should have a repr on every enums"),
+            enumeration,
+        ),
+    }
+}
+
+fn expand_read_from_slice_data_unit(ident: &syn::Ident, from: &PackedUnitOrigin) -> TokenStream {
+    let constructor = match from {
+        PackedUnitOrigin::Unit => quote! { #ident },
+        PackedUnitOrigin::Tuple => quote! { #ident () },
+        PackedUnitOrigin::Brace => quote! { #ident {} },
+    };
+
+    quote! {
+        fn unchecked_read_from_slice(_view: ::packtool::View<'_, Self>) -> Self {
+            #constructor
+        }
+    }
+}
+
+fn expand_read_from_slice_data_variants<'a, I>(
+    repr: &syn::Path,
+    ident: &syn::Ident,
+    variants: I,
+) -> TokenStream
+where
+    I: IntoIterator<Item = &'a PackedVariant>,
+{
+    let mut discriminants = Vec::new();
+
+    for variant in variants.into_iter() {
+        let (_, discriminant) = if let Some(discriminant) = variant.discriminant.as_ref() {
+            discriminant
+        } else {
+            panic!("should always be a discriminant")
+        };
+        let variant = &variant.ident;
+
+        discriminants.push({
+            quote! {
+                #discriminant => { #ident :: #variant }
+            }
+        });
+    }
+
+    let value = if repr.is_ident("u8") {
+        quote! { view.as_ref()[0] }
+    } else if repr.is_ident("i8") {
+        quote! { view.as_ref()[0] as i8 }
+    } else {
+        quote! {
+            <#repr>::from_le_bytes(
+                view.as_ref().try_into().unwrap()
+            )
+        }
+    };
+
+    quote! {
+        match #value {
+            #( #discriminants ),*
+            _ => panic!("Invalid discriminant"),
+        }
+    }
+}
+
+fn expand_read_from_slice_data_enumeration(
+    repr: &syn::Path,
+    ident: &syn::Ident,
+    enumeration: &PackedEnum,
+) -> TokenStream {
+    let variants = expand_read_from_slice_data_variants(repr, ident, &enumeration.variants);
+
+    quote! {
+        fn unchecked_read_from_slice(view: ::packtool::View<'_, Self>) -> Self {
+            use ::core::convert::TryInto as _;
+
+            #variants
+        }
+    }
+}
+
+fn expand_read_from_slice(container: &Container) -> TokenStream {
+    match &container.data {
+        Data::Unit(unit) => expand_read_from_slice_data_unit(container.ident(), &unit.from),
+        Data::Tuple(tuple) => todo!(),
+        Data::Struct(structure) => todo!(),
+        Data::Enum(enumeration) => expand_read_from_slice_data_enumeration(
+            container
+                .attributes
+                .repr
+                .as_ref()
+                .expect("Should have a repr on every enums"),
+            container.ident(),
+            enumeration,
+        ),
     }
 }

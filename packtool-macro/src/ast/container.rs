@@ -68,7 +68,10 @@ impl Parse for Data {
         } else if input.peek(Token!(enum)) {
             let enumeration: PackedEnum = input.parse()?;
             if enumeration.equivalent_to_packed_unit() {
-                Ok(Data::Unit(enumeration.into_unit()))
+                Err(syn::Error::new(
+                    input.span(),
+                    "zero-variant enums cannot be packed. This is because they cannot be instantiated.",
+                ))
             } else {
                 Ok(Data::Enum(enumeration))
             }

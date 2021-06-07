@@ -3,10 +3,17 @@ use syn::{
     Result, Token,
 };
 
+pub enum PackedUnitOrigin {
+    Unit,
+    Tuple,
+    Brace,
+}
+
 pub struct PackedUnit {
     pub _struct_token: Token!(struct),
     pub ident: syn::Ident,
     pub _semi: Token!(;),
+    pub from: PackedUnitOrigin,
 }
 
 impl Parse for PackedUnit {
@@ -15,6 +22,7 @@ impl Parse for PackedUnit {
             _struct_token: input.parse()?,
             ident: input.parse()?,
             _semi: input.parse()?,
+            from: PackedUnitOrigin::Unit,
         })
     }
 }
