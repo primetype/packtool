@@ -3,6 +3,21 @@ name = "packtool"
 version = "0.1.0"
 authors = ["Nicolas Di Prima <nicolas@primetype.co.uk>"]
 edition = "2018"
+description = "In memory packing made easy"
+homepage = "https://github.com/primetype/packtool"
+repository = "https://github.com/primetype/packtool/"
+license = "MIT OR Apache-2.0"
+keywords = [
+    "packtool",
+    "packing",
+    "memory",
+    "view",
+    "format"
+]
+categories = [ "encoding", "parsing" ]
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 hex = "0.4.3"
