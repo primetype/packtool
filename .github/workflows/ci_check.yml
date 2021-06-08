@@ -1,0 +1,55 @@
+name: Continuous Health Check
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - 1.51.0  # Minimum supported rust version
+
+    steps:
+      - name: "checkout"
+        uses: actions/checkout@v2
+
+      - name: "setup"
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: "Build"
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: "unit tests"
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+      - name: "rustfmt"
+        continue-on-error: true
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: "clippy"
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all --all-features -- --deny "clippy::all"
