@@ -1,5 +1,7 @@
 # packtool
 
+[![Continuous Health Check](https://github.com/primetype/packtool/actions/workflows/ci_check.yml/badge.svg?branch=master)](https://github.com/primetype/packtool/actions/workflows/ci_check.yml)
+
 Rust's tooling to write packed objects. Objects that can be packed
 into specific serialization format of fixed size.
 
