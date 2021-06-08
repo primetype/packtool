@@ -1,8 +1,5 @@
+use crate::{Error, Packed, Packet};
 use std::{any, fmt, hash, marker};
-
-use anyhow::Result;
-
-use crate::Packed;
 
 /// view of a slice in memory as a packed structure of type `T`
 pub struct View<'a, T: ?Sized> {
@@ -24,13 +21,24 @@ where
         }
     }
 
-    /// reconstruct the object `T` from the given [`View<'_, T>`]
+    /// reconstruct the object `T` from the given [`View`]
     ///
     /// this function will involve some hoops and loops and may
     /// involve some heap allocation.
     #[inline]
-    pub fn into(self) -> T {
-        T::unchecked_read_from_slice(self)
+    #[must_use = "this will clone data from the slice, it is often expensive"]
+    pub fn unpack(self) -> T {
+        T::unchecked_read_from_slice(self.slice)
+    }
+
+    /// create a clone of the given slice that is going to be owned
+    /// by the given [`Packet`].
+    ///
+    /// Only do that if you need to hold onto the serialized data.
+    #[inline]
+    #[must_use = "this will copy the memory slice"]
+    pub fn to_owned(self) -> Packet<T> {
+        Packet::new(self.slice.to_owned().into_boxed_slice())
     }
 
     /// create a [`View`] from the given slice.
@@ -40,13 +48,10 @@ where
     ///
     /// Once the [`View`] is created, it is possible to use it
     /// safely across the board.
-    pub fn try_from_slice(slice: &'a [u8]) -> Result<Self> {
-        anyhow::ensure!(
-            slice.len() == T::SIZE,
-            "invalid length for {ty}, expecting {expected} bytes",
-            ty = ::std::any::type_name::<T>(),
-            expected = T::SIZE
-        );
+    pub fn try_from_slice(slice: &'a [u8]) -> Result<Self, Error> {
+        if T::SIZE != slice.len() {
+            return Err(Error::invalid_size::<T>(slice.len(), T::SIZE));
+        }
 
         T::check(slice)?;
         Ok(View::new(slice))

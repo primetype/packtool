@@ -14,7 +14,8 @@ All [`Packed`] unit structures must have a `#[packed(value = ...)]`
 attribute. The value can be set to any literal except: `bool`, `float`.
 
 ```
-use packtool::Packed;
+use packtool::{Packed, View};
+# use packtool::Error;
 
 /// a unit that is always the utf8 string `"my protocol"`
 /// and takes 11 bytes in the packed structure
@@ -32,6 +33,13 @@ pub struct OtherUnit();
 #[derive(Packed)]
 #[packed(value = 0xcafeu32)]
 pub struct LastButNotLeast {}
+
+# fn test() -> Result<(), Error> {
+const SLICE: &[u8] = b"my protocol";
+let view: View<'_, ProtocolPrefix> = View::try_from_slice(SLICE)?;
+
+# Ok(()) }
+# test().unwrap();
 
 # assert_eq!(ProtocolPrefix::SIZE, 11);
 # assert_eq!(OtherUnit::SIZE, 1);
@@ -84,7 +92,8 @@ pub struct Header {
 Only enumerations without fields are allowed for now.
 
 ```
-use packtool::Packed;
+use packtool::{Packed, View};
+# use packtool::Error;
 
 #[derive(Packed)]
 #[repr(u8)]
@@ -93,6 +102,14 @@ pub enum Version {
     V2 = 2,
 }
 
+# fn test() -> Result<(), Error> {
+# const SLICE: &[u8] = &[1];
+let view: View<'_, Version> = View::try_from_slice(SLICE)?;
+
+assert!(matches!(view.unpack(), Version::V1));
+
+# Ok(()) }
+# test().unwrap();
 # assert_eq!(Version::SIZE, 1);
 ```
 
@@ -110,16 +127,30 @@ pub enum Color {
 ```
 */
 
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 mod array;
+mod error;
+mod packet;
+mod primitives;
 mod tuple;
 mod view;
 
-use std::convert::TryInto;
-
-pub use self::view::View;
-pub use anyhow::{anyhow, ensure, Context, Result};
+pub use self::{
+    error::{Context, Error},
+    packet::Packet,
+    view::View,
+};
 pub use packtool_macro::Packed;
 
+/// trait to define how a fixed size Packed object is serialized
+/// into a byte slice representation.
+///
+/// see crate documentation for more information.
 pub trait Packed: Sized {
     /// the static size of a packed object in a byte array
     ///
@@ -129,96 +160,25 @@ pub trait Packed: Sized {
 
     /// assuming the given slice if valid, perform a conversion
     /// from the slice to the object.
-    ///
-    /// it should be assumed the `checks` have been performed
-    /// appropriately since we are passing in the [`View`]
-    /// and not the raw slice.
-    fn unchecked_read_from_slice(view: View<'_, Self>) -> Self;
+    fn unchecked_read_from_slice(slice: &[u8]) -> Self;
+
+    /// assuming there is enough slice available in the
+    fn unchecked_write_to_slice(&self, _slice: &mut [u8]);
 
     /// check the validity of the given slice to hold the appropriate value
     ///
     /// the length of the slice is already handled by the [`View::try_from_slice`]
     /// method so no need to do that again in here.
+    fn check(slice: &[u8]) -> Result<(), Error>;
+
+    /// assuming the given slice if valid, perform a conversion
+    /// from the slice to the object.
     ///
-    fn check(slice: &[u8]) -> Result<()>;
-}
-
-impl Packed for i8 {
-    const SIZE: usize = 1;
+    /// it should be assumed the `checks` have been performed
+    /// appropriately since we are passing in the [`View`]
+    /// and not the raw slice.
     #[inline]
-    fn unchecked_read_from_slice(slice: View<'_, Self>) -> Self {
-        slice.as_ref()[0] as i8
-    }
-
-    #[inline]
-    fn check(_slice: &[u8]) -> Result<()> {
-        // no need to check the size of the slice, it's already handled
-        // by the [`View::try_from_slice`]
-        Ok(())
+    fn read(view: View<'_, Self>) -> Self {
+        Self::unchecked_read_from_slice(view.as_ref())
     }
 }
-impl Packed for u8 {
-    const SIZE: usize = 1;
-    #[inline]
-    fn unchecked_read_from_slice(slice: View<'_, Self>) -> Self {
-        slice.as_ref()[0]
-    }
-
-    #[inline]
-    fn check(_slice: &[u8]) -> Result<()> {
-        // no need to check the size of the slice, it's already handled
-        // by the [`View::try_from_slice`]
-        Ok(())
-    }
-}
-
-macro_rules! primitive_pack {
-    ($t:ty) => {
-        impl Packed for $t {
-            const SIZE: usize = ::std::mem::size_of::<$t>();
-
-            #[inline]
-            fn check(_slice: &[u8]) -> Result<()> {
-                // no need to check the size of the slice, it's already handled
-                // by the [`View::try_from_slice`]
-                Ok(())
-            }
-
-            #[inline]
-            fn unchecked_read_from_slice(slice: View<'_, Self>) -> Self {
-                #[cfg(debug_assertions)]
-                {
-                    match slice.as_ref().try_into() {
-                        Ok(bytes) => <$t>::from_le_bytes(bytes),
-                        Err(error) => {
-                            panic!(
-                                "Failed read {ty} from slice: {error}",
-                                ty = ::core::any::type_name::<$t>(),
-                                error = error,
-                            )
-                        }
-                    }
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    if let Ok(bytes) = slice.as_ref().try_into() {
-                        <$t>::from_le_bytes(bytes)
-                    } else {
-                        unsafe { ::core::hint::unreachable_unchecked() }
-                    }
-                }
-            }
-        }
-    };
-}
-
-primitive_pack!(u16);
-primitive_pack!(u32);
-primitive_pack!(u64);
-primitive_pack!(u128);
-primitive_pack!(usize);
-primitive_pack!(i16);
-primitive_pack!(i32);
-primitive_pack!(i64);
-primitive_pack!(i128);
-primitive_pack!(isize);

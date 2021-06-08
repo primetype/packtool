@@ -17,12 +17,14 @@ pub fn packed_definitions(container: Container) -> TokenStream {
     let size = expand_size(&container);
     let check = expand_check(&container);
     let unchecked_read_from_slice = expand_read_from_slice(&container);
+    let unchecked_write_to_slice = expand_write_to_slice(&container);
 
     quote! {
         impl Packed for #ident {
             const SIZE: usize = #size;
 
             #unchecked_read_from_slice
+            #unchecked_write_to_slice
 
             #check
         }
@@ -184,11 +186,11 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
     match value {
         syn::Lit::Str(string) => {
             quote! {
-                fn check(slice: &[u8]) -> ::packtool::Result<()> {
+                fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
                     ::packtool::ensure!(
+                        #ident,
                         slice == #string.as_bytes(),
-                        "Invalid string encoded for type {ty}, expected {expected} but received {received}",
-                        ty = ::core::any::type_name::<#ident>(),
+                        "Invalid string, expected {expected} but received {received}",
                         expected = #string,
                         received = ::std::string::String::from_utf8_lossy(slice),
                     );
@@ -199,11 +201,11 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
         }
         syn::Lit::ByteStr(bytes) => {
             quote! {
-                fn check(slice: &[u8]) -> ::packtool::Result<()> {
+                fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
                     ::packtool::ensure!(
+                        #ident,
                         slice == #bytes,
-                        "Invalid string encoded for type {ty}, expected {expected:?} but received {received:?}",
-                        ty = ::core::any::type_name::<#ident>(),
+                        "Invalid string, expected {expected:?} but received {received:?}",
                         expected = #bytes,
                         received = slice,
                     );
@@ -214,11 +216,11 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
         }
         syn::Lit::Byte(byte) => {
             quote! {
-                fn check(slice: &[u8]) -> ::packtool::Result<()> {
+                fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
                     ::packtool::ensure!(
+                        #ident,
                         slice[0] == Some(#byte),
-                        "Invalid byte string encoded for type {ty}, expected {expected:X} but received {received:X}",
-                        ty = ::core::any::type_name::<#ident>(),
+                        "Invalid byte string, expected {expected:X} but received {received:X}",
                         expected = #byte,
                         received = slice[0],
                     );
@@ -229,16 +231,15 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
         }
         syn::Lit::Char(char) => {
             quote! {
-                fn check(slice: &[u8]) -> ::packtool::Result<()> {
+                fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
                     use ::packtool::Context as _;
-
                     let c = ::std::str::from_utf8(slice)
                         .context("Failed to parse valid utf8 char from the slice")?;
 
                     ::packtool::ensure!(
+                        #ident,
                         c.chars().next() == Some(#char),
-                        "Invalid {ty}, expected {expected} but received {received}",
-                        ty = ::core::any::type_name::<#ident>(),
+                        "Invalid UTF8 encoded char, expected {expected} but received {received}",
                         expected = #char,
                         received = c,
                     );
@@ -257,23 +258,18 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
             } else {
                 let ident = syn::Ident::new(int.suffix(), int.span());
                 quote! {
-                    fn check(slice: &[u8]) -> ::packtool::Result<()> {
-                        use ::core::convert::TryInto as _;
+                    fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
                         use ::packtool::Context as _;
+                        use ::core::convert::TryInto as _;
                         let int = <#ident>::from_le_bytes(
                             slice.try_into()
-                                .with_context(||
-                                    format!(
-                                        "Failed to parse the {ty}",
-                                        ty = ::core::any::type_name::<#ident>(),
-                                    )
-                                )?
+                                .context("expecting to parse integer value")?
                         );
 
                         ::packtool::ensure!(
+                            #ident,
                             int == #int,
-                            "Invalid packed integer for type {ty}, expected {expected} but received {received}",
-                            ty = ::core::any::type_name::<#ident>(),
+                            "Invalid packed integer, expected {expected} but received {received}",
                             expected = #int,
                             received = int,
                         );
@@ -304,19 +300,17 @@ fn expand_check_data_field(
     let ty = &field.ty;
     let on_error = if let Some(ident) = field.ident.as_ref() {
         quote! {
-            with_context(||
-                format!(
-                    "failed to check field {ident}",
-                    ident = stringify!(#ident),
+            context(
+                ::packtool::Error::invalid_field::<#ty>(
+                    stringify!(#ident)
                 )
             )
         }
     } else {
         quote! {
-            with_context(||
-                format!(
-                    "failed to check tuple field {index}",
-                    index = #index,
+            context(
+                ::packtool::Error::invalid_tuple::<#ty>(
+                    #index
                 )
             )
         }
@@ -370,7 +364,8 @@ where
     } else {
         quote! {
             <#repr>::from_le_bytes(
-                slice.try_into().unwrap()
+                slice.try_into()
+                    .context("invalid length")?
             )
         }
     };
@@ -380,7 +375,12 @@ where
             # ( #discriminants )|* => {
                 ()
             }
-            _ => return Err(::packtool::anyhow!("Invalid discriminant")),
+            found => return Err(
+                ::packtool::Error::invalid_discriminant::<Self, _>(
+                    found,
+                    ::core::concat!(#(#discriminants , ", "),*),
+                )
+            ),
         }
     }
 }
@@ -388,7 +388,7 @@ where
 fn expand_check_data_tuple(tuple: &PackedTuple) -> TokenStream {
     let fields = expand_check_data_fields(&tuple.fields);
     quote! {
-        fn check(slice: &[u8]) -> ::packtool::Result<()> {
+        fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
             use ::core::convert::TryInto as _;
             use ::packtool::Context as _;
 
@@ -403,7 +403,7 @@ fn expand_check_data_structure(structure: &PackedStruct) -> TokenStream {
     let fields = expand_check_data_fields(&structure.fields);
 
     quote! {
-        fn check(slice: &[u8]) -> ::packtool::Result<()> {
+        fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
             use ::core::convert::TryInto as _;
             use ::packtool::Context as _;
 
@@ -418,7 +418,7 @@ fn expand_check_data_enumeration(repr: &syn::Path, enumeration: &PackedEnum) -> 
     let variants = expand_check_data_variants(repr, &enumeration.variants);
 
     quote! {
-        fn check(slice: &[u8]) -> ::packtool::Result<()> {
+        fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
             use ::core::convert::TryInto as _;
             use ::packtool::Context as _;
 
@@ -460,7 +460,7 @@ fn expand_read_from_slice_data_unit(ident: &syn::Ident, from: &PackedUnitOrigin)
     };
 
     quote! {
-        fn unchecked_read_from_slice(_view: ::packtool::View<'_, Self>) -> Self {
+        fn unchecked_read_from_slice(_view: &[u8]) -> Self {
             #constructor
         }
     }
@@ -492,13 +492,13 @@ where
     }
 
     let value = if repr.is_ident("u8") {
-        quote! { view.as_ref()[0] }
+        quote! { slice[0] }
     } else if repr.is_ident("i8") {
-        quote! { view.as_ref()[0] as i8 }
+        quote! { slice[0] as i8 }
     } else {
         quote! {
             <#repr>::from_le_bytes(
-                view.as_ref().try_into().unwrap()
+                slice.try_into().unwrap()
             )
         }
     };
@@ -519,7 +519,7 @@ fn expand_read_from_slice_data_enumeration(
     let variants = expand_read_from_slice_data_variants(repr, ident, &enumeration.variants);
 
     quote! {
-        fn unchecked_read_from_slice(view: ::packtool::View<'_, Self>) -> Self {
+        fn unchecked_read_from_slice(slice: &[u8]) -> Self {
             use ::core::convert::TryInto as _;
 
             #variants
@@ -527,12 +527,275 @@ fn expand_read_from_slice_data_enumeration(
     }
 }
 
+fn expand_read_from_slice_data_field(
+    field: &PackedField,
+    start: TokenStream,
+) -> (TokenStream, TokenStream) {
+    let ty = &field.ty;
+
+    let end = quote! {
+        #start + <#ty as Packed>::SIZE
+    };
+    let quote = if let Some(ident) = field.ident.as_ref() {
+        quote! {
+            #ident : <#ty as Packed>::unchecked_read_from_slice(&slice[(#start)..(#end)])
+        }
+    } else {
+        quote! {
+            <#ty as Packed>::unchecked_read_from_slice(&slice[(#start)..(#end)])
+        }
+    };
+
+    (quote, end)
+}
+
+fn expand_read_from_slice_data_fields<'a, I>(fields: I) -> TokenStream
+where
+    I: IntoIterator<Item = &'a PackedField>,
+{
+    let mut checks = Vec::new();
+
+    let mut start = quote! { 0 };
+    for field in fields.into_iter() {
+        let (check, end) = expand_read_from_slice_data_field(field, start.clone());
+        checks.push(check);
+        start = end;
+    }
+
+    quote! { #(#checks),* }
+}
+
+fn expand_read_from_slice_data_tuple(tuple: &PackedTuple) -> TokenStream {
+    let ident = tuple.ident();
+    let fields = expand_read_from_slice_data_fields(&tuple.fields);
+    quote! {
+        fn unchecked_read_from_slice(slice: &[u8]) -> Self {
+            use ::core::convert::TryInto as _;
+
+            #ident (
+                #fields
+            )
+        }
+    }
+}
+
+fn expand_read_from_slice_data_structure(structure: &PackedStruct) -> TokenStream {
+    let fields = expand_read_from_slice_data_fields(&structure.fields);
+    let ident = structure.ident();
+
+    quote! {
+        fn unchecked_read_from_slice(slice: &[u8]) -> Self {
+            use ::core::convert::TryInto as _;
+
+            #ident {
+                #fields
+            }
+        }
+    }
+}
+
 fn expand_read_from_slice(container: &Container) -> TokenStream {
     match &container.data {
         Data::Unit(unit) => expand_read_from_slice_data_unit(container.ident(), &unit.from),
-        Data::Tuple(tuple) => todo!(),
-        Data::Struct(structure) => todo!(),
+        Data::Tuple(tuple) => expand_read_from_slice_data_tuple(tuple),
+        Data::Struct(structure) => expand_read_from_slice_data_structure(structure),
         Data::Enum(enumeration) => expand_read_from_slice_data_enumeration(
+            container
+                .attributes
+                .repr
+                .as_ref()
+                .expect("Should have a repr on every enums"),
+            container.ident(),
+            enumeration,
+        ),
+    }
+}
+
+fn expand_write_to_slice_data_unit(value: &syn::Lit) -> TokenStream {
+    match value {
+        syn::Lit::Str(string) => {
+            quote! {
+                fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+                    slice.copy_from_slice(#string.as_bytes());
+                }
+            }
+        }
+        syn::Lit::ByteStr(bytes) => {
+            quote! {
+                fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+                    slice.copy_from_slice(#bytes);
+                }
+            }
+        }
+        syn::Lit::Byte(byte) => {
+            quote! {
+                fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+                    slice[0] = #byte;
+                }
+            }
+        }
+        syn::Lit::Char(char) => {
+            quote! {
+                fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+                    slice.copy_from_slice(String::from(#char).as_bytes());
+                }
+            }
+        }
+        syn::Lit::Int(int) => {
+            if int.suffix().is_empty() {
+                syn::Error::new_spanned(
+                    int,
+                    "expect to know the exact type of the value, add suffix (like in `0i64`)",
+                )
+                .to_compile_error()
+            } else {
+                quote! {
+                    fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+                        slice.copy_from_slice(
+                            &(#int).to_le_bytes()
+                        );
+                    }
+                }
+            }
+        }
+        syn::Lit::Float(_) => {
+            syn::Error::new_spanned(value, "floating point values are not supported")
+                .to_compile_error()
+        }
+        syn::Lit::Bool(_) => {
+            syn::Error::new_spanned(value, "boolean values are not supported").to_compile_error()
+        }
+        syn::Lit::Verbatim(_) => {
+            syn::Error::new_spanned(value, "verbatim values are not supported").to_compile_error()
+        }
+    }
+}
+
+fn expand_write_to_slice_data_variants<'a, I>(
+    repr: &syn::Path,
+    ident: &syn::Ident,
+    variants: I,
+) -> TokenStream
+where
+    I: IntoIterator<Item = &'a PackedVariant>,
+{
+    let mut discriminants = Vec::new();
+
+    for variant in variants.into_iter() {
+        let (_, discriminant) = if let Some(discriminant) = variant.discriminant.as_ref() {
+            discriminant
+        } else {
+            panic!("should always be a discriminant")
+        };
+        let variant = &variant.ident;
+
+        let value = if repr.is_ident("u8") {
+            quote! { slice[0] = #discriminant; }
+        } else if repr.is_ident("i8") {
+            quote! { slice[0] = #discriminant as i8; }
+        } else {
+            quote! {
+                slice.copy_from_slice(&<#repr>::to_le_bytes(#discriminant));
+            }
+        };
+
+        discriminants.push({
+            quote! {
+                #ident :: #variant => { #value }
+            }
+        });
+    }
+
+    quote! {
+        match self {
+            #( #discriminants ),*
+        }
+    }
+}
+
+fn expand_write_to_slice_data_enumeration(
+    repr: &syn::Path,
+    ident: &syn::Ident,
+    enumeration: &PackedEnum,
+) -> TokenStream {
+    let variants = expand_write_to_slice_data_variants(repr, ident, &enumeration.variants);
+
+    quote! {
+        fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+            #variants
+        }
+    }
+}
+
+fn expand_write_to_slice_data_field(
+    field: &PackedField,
+    index: syn::Index,
+    start: TokenStream,
+) -> (TokenStream, TokenStream) {
+    let ty = &field.ty;
+
+    let end = quote! {
+        #start + <#ty as Packed>::SIZE
+    };
+    let quote = if let Some(ident) = field.ident.as_ref() {
+        quote! {
+            self.#ident.unchecked_write_to_slice(&mut slice[(#start)..(#end)])
+        }
+    } else {
+        quote! {
+            self.#index.unchecked_write_to_slice(&mut slice[(#start)..(#end)])
+        }
+    };
+
+    (quote, end)
+}
+
+fn expand_write_to_slice_data_fields<'a, I>(fields: I) -> TokenStream
+where
+    I: IntoIterator<Item = &'a PackedField>,
+{
+    let mut checks = Vec::new();
+
+    let mut start = quote! { 0 };
+    for (index, field) in fields.into_iter().enumerate() {
+        let (check, end) =
+            expand_write_to_slice_data_field(field, syn::Index::from(index), start.clone());
+        checks.push(check);
+        start = end;
+    }
+
+    quote! { #(#checks);* }
+}
+
+fn expand_write_to_slice_data_tuple(tuple: &PackedTuple) -> TokenStream {
+    let fields = expand_write_to_slice_data_fields(&tuple.fields);
+    quote! {
+        fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+            use ::core::convert::TryInto as _;
+
+            #fields
+        }
+    }
+}
+
+fn expand_write_to_slice_data_structure(structure: &PackedStruct) -> TokenStream {
+    let fields = expand_write_to_slice_data_fields(&structure.fields);
+
+    quote! {
+        fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+            #fields
+        }
+    }
+}
+
+fn expand_write_to_slice(container: &Container) -> TokenStream {
+    match &container.data {
+        Data::Unit(_) => {
+            expand_write_to_slice_data_unit(container.attributes.value.as_ref().unwrap())
+        }
+        Data::Tuple(tuple) => expand_write_to_slice_data_tuple(tuple),
+        Data::Struct(structure) => expand_write_to_slice_data_structure(structure),
+        Data::Enum(enumeration) => expand_write_to_slice_data_enumeration(
             container
                 .attributes
                 .repr
