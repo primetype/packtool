@@ -40,6 +40,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --all --all-features
 
       - name: "rustfmt"
         continue-on-error: true
