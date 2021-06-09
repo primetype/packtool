@@ -9,6 +9,17 @@ Support rust from `1.51.0` onward.
 
 # Example
 
+## bitcoin block header
+
+a simple example of the bitcoin block header format parsing is available in
+the [examples](examples) directory.
+
+```
+$ cargo run --example bitcoin
+```
+
+## tar
+
 a very simplified implementation of the TAR archive file format is implemented in
 the [examples](examples) directory.
 
