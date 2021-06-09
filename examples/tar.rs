@@ -1,6 +1,5 @@
 use packtool::{Packed, View};
 
-#[allow(clippy::never_loop)]
 fn main() {
     assert_eq!(Header::SIZE, 512,);
 
