@@ -2,7 +2,7 @@ use packtool::{Packed, View};
 
 #[allow(clippy::never_loop)]
 fn main() {
-    assert_eq!(Header::SIZE, 345 + 155,);
+    assert_eq!(Header::SIZE, 512,);
 
     let bytes = std::fs::read("example.tar").expect("need example tar file");
     let mut sub = bytes.as_slice();
@@ -13,13 +13,12 @@ fn main() {
 
         let file = std::str::from_utf8(&header.filename.0).expect("valid filename");
 
-        let header_padding = 512 - Header::SIZE;
         let file_size = header.file_size.to_size();
         let file_padding = 512 - file_size % 512;
 
         println!("compressed file: {} ({} bytes)", file, file_size);
 
-        sub = &sub[Header::SIZE + header_padding + file_size + file_padding..];
+        sub = &sub[Header::SIZE + file_size + file_padding..];
 
         if sub.len() == 1024 {
             break;
@@ -90,6 +89,10 @@ pub struct DeviceMinorNumber([u8; 8]);
 pub struct FileNamePrefix([u8; 155]);
 
 #[derive(Packed)]
+#[packed(value = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")]
+pub struct HeaderPadding;
+
+#[derive(Packed)]
 pub struct Header {
     filename: FileName,
     file_mode: FileMode,
@@ -107,6 +110,7 @@ pub struct Header {
     device_major_number: DeviceMajorNumber,
     device_minor_number: DeviceMinorNumber,
     filename_prefix: FileNamePrefix,
+    _padding: HeaderPadding,
 }
 
 impl FileSize {
