@@ -7,6 +7,18 @@ into specific serialization format of fixed size.
 
 Support rust from `1.51.0` onward.
 
+# Example
+
+a very simplified implementation of the TAR archive file format is implemented in
+the [examples](examples) directory.
+
+```
+$ tar -cf example.tar README.md Cargo.toml
+$ cargo run --example tar
+compressed file: README.md (967 bytes)
+compressed file: Cargo.toml (885 bytes)
+```
+
 ## License
 
 This project is licensed under the [MIT] **OR** [Apache-2.0] dual license.
