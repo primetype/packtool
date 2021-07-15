@@ -203,7 +203,7 @@ fn expand_size(container: &Container) -> TokenStream {
         ),
         Data::Tuple(tuple) => expand_size_from_types(&tuple.fields),
         Data::Struct(structure) => expand_size_from_types(&structure.fields),
-        Data::Enum(enumeration) => expand_size_from_enumeration(&enumeration),
+        Data::Enum(enumeration) => expand_size_from_enumeration(enumeration),
     }
 }
 
