@@ -1,6 +1,6 @@
 [package]
 name = "packtool"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Nicolas Di Prima <nicolas@primetype.co.uk>"]
 edition = "2018"
 description = "In memory packing made easy"
@@ -21,7 +21,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 hex = "0.4.3"
-packtool-macro = { path = "./packtool-macro", version = "0.1.0" }
+packtool-macro = { path = "./packtool-macro", version = "0.2" }
 thiserror = "1.0.25"
 
 [dev-dependencies]
