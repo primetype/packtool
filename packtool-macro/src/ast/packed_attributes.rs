@@ -7,14 +7,16 @@ use syn::{
 pub struct PackedAttributes {
     pub value: Option<syn::Lit>,
     pub repr: Option<syn::Path>,
+    pub accessor: Option<syn::Ident>,
 }
 
 enum PackedAttribute {
     Value(syn::Lit),
     Repr(syn::Path),
+    Accessor(syn::Ident),
 }
 
-const ATTRIBUTE_LIST: &[&str] = &[PackedAttribute::VALUE];
+const ATTRIBUTE_LIST: &[&str] = &[PackedAttribute::VALUE, PackedAttribute::ACCESSOR];
 
 impl PackedAttributes {
     fn from_iter<T>(attributes: T) -> Result<Self>
@@ -37,6 +39,16 @@ impl PackedAttributes {
                     // we only use it to detect if it was set in the
                     // case of enum with only unit variants
                     result.repr = Some(path);
+                }
+                PackedAttribute::Accessor(accessor) => {
+                    if result.accessor.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            accessor,
+                            "The accessor has already been set",
+                        ));
+                    } else {
+                        result.accessor = Some(accessor);
+                    }
                 }
             }
         }
@@ -67,6 +79,7 @@ impl Parse for PackedAttributes {
 
 impl PackedAttribute {
     const VALUE: &'static str = "value";
+    const ACCESSOR: &'static str = "accessor";
 
     fn from(meta: syn::Meta) -> Result<Vec<Self>> {
         match meta {
@@ -119,6 +132,16 @@ impl PackedAttribute {
             syn::NestedMeta::Meta(syn::Meta::NameValue(name_value)) => {
                 if name_value.path.is_ident(Self::VALUE) {
                     Ok(Self::Value(name_value.lit))
+                } else if name_value.path.is_ident(Self::ACCESSOR) {
+                    if let syn::Lit::Str(ident) = name_value.lit {
+                        let ident = syn::Ident::new(&ident.value(), ident.span());
+                        Ok(Self::Accessor(ident))
+                    } else {
+                        Err(syn::Error::new_spanned(
+                            name_value,
+                            "Set the value of the accessor: expecting a string literal",
+                        ))
+                    }
                 } else {
                     Err(syn::Error::new_spanned(
                         name_value,

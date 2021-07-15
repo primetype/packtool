@@ -15,6 +15,7 @@ pub struct None(u32);
 
 #[derive(Packed, Debug)]
 pub struct Header {
+    #[packed(accessor = "get_version")]
     version: Version,
     prev_block: Hash,
     merkle_root: Hash,
@@ -46,9 +47,12 @@ fn main() {
     let header: &[u8] = &BLOCK[..80];
 
     let view = View::<Header>::try_from_slice(header).expect("valid block");
-    let header = view.unpack();
 
-    println!("{:#?}", header)
+    let version = Header::get_version(view).unpack();
+    let timestamp = Header::timestamp(view).unpack();
+
+    println!("{:?}", version);
+    println!("{:?}", timestamp);
 }
 
 impl fmt::Debug for Hash {

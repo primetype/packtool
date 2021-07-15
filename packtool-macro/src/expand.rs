@@ -18,8 +18,13 @@ pub fn packed_definitions(container: Container) -> TokenStream {
     let check = expand_check(&container);
     let unchecked_read_from_slice = expand_read_from_slice(&container);
     let unchecked_write_to_slice = expand_write_to_slice(&container);
+    let accessors = expand_accessors(&container);
 
     quote! {
+        impl #ident {
+            #accessors
+        }
+
         impl Packed for #ident {
             const SIZE: usize = #size;
 
@@ -34,6 +39,7 @@ pub fn packed_definitions(container: Container) -> TokenStream {
 fn check(container: &Container) -> Result<()> {
     match &container.data {
         Data::Unit(unit) => {
+            check_no_attribute_accessor("Unit", &container.attributes)?;
             // all unit types need to have a value associated
             if container.attributes.value.is_none() {
                 return Err(syn::Error::new_spanned(
@@ -47,14 +53,20 @@ fn check(container: &Container) -> Result<()> {
                 "an unnamed struct (parenthesis struct)",
                 &container.attributes,
             )?;
+            check_no_attribute_accessor(
+                "an unnamed struct (parenthesis struct)",
+                &container.attributes,
+            )?;
             check_no_value_in_field(&t.fields)?;
         }
         Data::Struct(s) => {
             check_no_attribute_value("a named struct (braced struct)", &container.attributes)?;
+            check_no_attribute_accessor("a named struct (braced struct)", &container.attributes)?;
             check_no_value_in_field(&s.fields)?;
         }
         Data::Enum(enumeration) => {
             check_no_attribute_value("an enum", &container.attributes)?;
+            check_no_attribute_accessor("an enum", &container.attributes)?;
             if enumeration.only_unit_variants() {
                 check_only_enum_variants_have_discriminant(enumeration)?;
                 if container.attributes.repr.is_none() {
@@ -82,6 +94,19 @@ fn check_only_enum_variants_have_discriminant(enumeration: &PackedEnum) -> Resul
         }
     }
 
+    Ok(())
+}
+
+fn check_no_attribute_accessor(scope: &str, attributes: &PackedAttributes) -> Result<()> {
+    if let Some(value) = attributes.accessor.as_ref() {
+        return Err(syn::Error::new_spanned(
+            value,
+            format!(
+                "Cannot have an accessor associated to {scope}",
+                scope = scope
+            ),
+        ));
+    }
     Ok(())
 }
 
@@ -804,5 +829,81 @@ fn expand_write_to_slice(container: &Container) -> TokenStream {
             container.ident(),
             enumeration,
         ),
+    }
+}
+
+fn expand_field_accessor(
+    field: &PackedField,
+    index: usize,
+    start: TokenStream,
+) -> (TokenStream, TokenStream) {
+    let ty = &field.ty;
+    let end = quote! {
+        #start + <#ty as Packed>::SIZE
+    };
+
+    let ident = if let Some(accessor) = field.attributes.accessor.as_ref() {
+        accessor.clone()
+    } else if let Some(ident) = field.ident.as_ref() {
+        ident.clone()
+    } else {
+        syn::Ident::new(&format!("_{}", index), proc_macro2::Span::call_site())
+    };
+
+    let accessor = quote! {
+        pub fn #ident<'a>(view: ::packtool::View<'a, Self>) -> ::packtool::View<'a, #ty> {
+            ::packtool::View::unchecked_from_slice(&view.as_slice()[#start..#end])
+        }
+    };
+
+    (accessor, end)
+}
+
+fn expand_fields_accessors<'a, I>(fields: I) -> TokenStream
+where
+    I: IntoIterator<Item = &'a PackedField>,
+{
+    let mut fields_accessors = Vec::new();
+
+    let mut start = quote! { 0 };
+    for (index, field) in fields.into_iter().enumerate() {
+        let (accessor, end) = expand_field_accessor(field, index, start.clone());
+        fields_accessors.push(accessor);
+        start = end;
+    }
+
+    quote! {
+        #( #fields_accessors )*
+    }
+}
+
+fn expand_tuple_accessors(tuple: &PackedTuple) -> TokenStream {
+    let fields_accessors = expand_fields_accessors(&tuple.fields);
+
+    quote! {
+         #fields_accessors
+    }
+}
+
+fn expand_structure_accessors(structure: &PackedStruct) -> TokenStream {
+    let fields_accessors = expand_fields_accessors(&structure.fields);
+
+    quote! {
+         #fields_accessors
+    }
+}
+
+fn expand_accessors(container: &Container) -> TokenStream {
+    match &container.data {
+        Data::Unit(_) => {
+            // no accessor for the unit type
+            quote! {}
+        }
+        Data::Enum(_enumeration) => {
+            // no accessor for the enum type
+            quote! {}
+        }
+        Data::Tuple(tuple) => expand_tuple_accessors(tuple),
+        Data::Struct(structure) => expand_structure_accessors(structure),
     }
 }

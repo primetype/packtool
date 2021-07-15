@@ -51,42 +51,6 @@ same value in the packed representation. When serializing the
 `ProtocolPrefix`, the `value` will be set with these 11
 characters.
 
-## combining packed objects
-
-It is possible to compose packed objects in named or tuple structures.
-
-```
-use packtool::Packed;
-
-#[derive(Packed)]
-#[packed(value = "packcoin")]
-pub struct Tag;
-
-/// 1 byte that will be used to store a version number
-#[derive(Packed)]
-#[repr(u8)]
-pub enum Version {
-    V1 = 1,
-    V2 = 2,
-}
-
-/// 8 bytes that will be used to store a block number
-#[derive(Packed)]
-pub struct BlockNumber(u32, u32);
-
-/// 9 bytes packed header
-#[derive(Packed)]
-pub struct Header {
-    tag: Tag,
-    version: Version,
-    block_number: BlockNumber
-}
-
-# assert_eq!(Version::SIZE, 1);
-# assert_eq!(BlockNumber::SIZE, 8);
-# assert_eq!(Header::SIZE, 17);
-```
-
 ## Enumeration
 
 Only enumerations without fields are allowed for now.
@@ -125,6 +89,109 @@ pub enum Color {
     Blue = -1
 }
 ```
+
+## combining packed objects
+
+It is possible to compose packed objects in named or tuple structures.
+
+```
+use packtool::Packed;
+
+#[derive(Packed)]
+#[packed(value = "packcoin")]
+pub struct Tag;
+
+/// 1 byte that will be used to store a version number
+#[derive(Packed)]
+#[repr(u8)]
+pub enum Version {
+    V1 = 1,
+    V2 = 2,
+}
+
+/// 8 bytes that will be used to store a block number
+#[derive(Packed)]
+pub struct BlockNumber(u32, u32);
+
+/// 9 bytes packed header
+#[derive(Packed)]
+pub struct Header {
+    tag: Tag,
+    version: Version,
+    block_number: BlockNumber
+}
+
+# assert_eq!(Version::SIZE, 1);
+# assert_eq!(BlockNumber::SIZE, 8);
+# assert_eq!(Header::SIZE, 17);
+```
+
+Each of the packed objects have a view accessor for each fields:
+
+* for named fields, the name of the accessor is the name of the field
+* for tuples, the name of the accessor is the index of the field preceded by an underscore (`_`): `_0`, `_1` etc.
+
+```
+# use packtool::{Packed, View, Packet};
+#
+# #[derive(Packed)]
+# #[packed(value = "packcoin")]
+# pub struct Tag;
+#
+# /// 1 byte that will be used to store a version number
+# #[derive(Packed)]
+# #[repr(u8)]
+# pub enum Version {
+#     V1 = 1,
+#     V2 = 2,
+# }
+#
+# /// 8 bytes that will be used to store a block number
+# #[derive(Packed)]
+# pub struct BlockNumber(u32, u32);
+#
+# /// 9 bytes packed header
+# #[derive(Packed)]
+# pub struct Header {
+#     tag: Tag,
+#     version: Version,
+#     block_number: BlockNumber
+# }
+#
+# let header = Header { tag: Tag, version: Version::V1, block_number: BlockNumber(0, 1) };
+# let header = Packet::pack(&header);
+# let header = header.view();
+#
+let tag: View<'_, Tag> = Header::tag(header);
+let block_number: View<'_, BlockNumber> = Header::block_number(header);
+
+let epoch: View<'_, u32> = BlockNumber::_0(block_number);
+let slot: u32  = BlockNumber::_1(block_number).unpack();
+#
+# assert_eq!(slot, 1);
+```
+
+You can rename the accessor with the attribute `accessor`:
+
+```
+# use packtool::{Packed, View, Packet};
+#
+#[derive(Packed)]
+pub struct BlockNumber(
+    #[packed(accessor = "epoch")]
+    u32,
+    #[packed(accessor = "slot")]
+    u32
+);
+#
+# let block_number = Packet::pack(&BlockNumber(0, 1));
+# let block_number = block_number.view();
+let epoch = BlockNumber::epoch(block_number); // instead of _0
+let slot = BlockNumber::slot(block_number).unpack(); // instead of _1
+#
+# assert_eq!(slot, 1);
+```
+
 */
 
 #[cfg(test)]

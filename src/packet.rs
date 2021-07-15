@@ -28,13 +28,10 @@ where
 
     /// pack any object that implements [`Packed`] into an owned
     /// slice of memory: [`Packet`].
-    pub fn pack<P>(packed: P) -> Self
-    where
-        P: AsRef<T>,
-    {
+    pub fn pack(packed: &T) -> Self {
         let mut boxed = vec![0; <T as Packed>::SIZE];
 
-        packed.as_ref().unchecked_write_to_slice(&mut boxed);
+        packed.unchecked_write_to_slice(&mut boxed);
 
         Self::new(boxed.into_boxed_slice())
     }

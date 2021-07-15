@@ -21,6 +21,16 @@ where
         }
     }
 
+    /// unsafely create a view of the given packed type
+    /// from the given slice.
+    ///
+    /// better not use this function if you are not sure this is
+    /// actually a valid slice.
+    #[inline]
+    pub fn unchecked_from_slice(slice: &'a [u8]) -> Self {
+        Self::new(slice)
+    }
+
     /// reconstruct the object `T` from the given [`View`]
     ///
     /// this function will involve some hoops and loops and may
@@ -55,6 +65,11 @@ where
 
         T::check(slice)?;
         Ok(View::new(slice))
+    }
+
+    #[inline]
+    pub fn as_slice(self) -> &'a [u8] {
+        self.slice
     }
 }
 
