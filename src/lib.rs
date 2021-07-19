@@ -192,6 +192,42 @@ let slot = BlockNumber::slot(block_number).unpack(); // instead of _1
 # assert_eq!(slot, 1);
 ```
 
+It is also possible to prevent the accessor to be created. You can set
+the accessor with a literal boolean to say if you want the accessor or
+not. `true` will simply means the default case (use the index of the field
+or use the name for the name of the accessor):
+
+```
+# use packtool::{Packed, View, Packet};
+#
+#[derive(Packed)]
+pub struct Hash(
+    #[packed(accessor = true)]
+    [u8; 32]
+);
+#
+# let hash = Packet::pack(&Hash([0; 32]));
+# let hash = hash.view();
+let bytes = Hash::_0(hash);
+# assert_eq!(bytes.unpack(), [0; 32]);
+```
+
+However if you set it to `false` there will be no accessor created for you:
+
+```compile_fail
+# use packtool::{Packed, View, Packet};
+#
+#[derive(Packed)]
+pub struct Hash(
+    #[packed(accessor = false)]
+    [u8; 32]
+);
+#
+# let hash = Packet::pack(&Hash([0; 32]));
+# let hash = hash.view();
+let bytes = Hash::_0(hash);
+```
+
 */
 
 #[cfg(test)]

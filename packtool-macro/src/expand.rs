@@ -3,8 +3,8 @@ use quote::quote;
 use syn::Result;
 
 use crate::ast::{
-    Container, Data, PackedAttributes, PackedEnum, PackedField, PackedStruct, PackedTuple,
-    PackedUnitOrigin, PackedVariant,
+    AccessorType, Container, Data, PackedAttributes, PackedEnum, PackedField, PackedStruct,
+    PackedTuple, PackedUnitOrigin, PackedVariant,
 };
 
 pub fn packed_definitions(container: Container) -> TokenStream {
@@ -98,9 +98,9 @@ fn check_only_enum_variants_have_discriminant(enumeration: &PackedEnum) -> Resul
 }
 
 fn check_no_attribute_accessor(scope: &str, attributes: &PackedAttributes) -> Result<()> {
-    if let Some(value) = attributes.accessor.as_ref() {
-        return Err(syn::Error::new_spanned(
-            value,
+    if !matches!(attributes.accessor, AccessorType::Default) {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
             format!(
                 "Cannot have an accessor associated to {scope}",
                 scope = scope
@@ -842,12 +842,16 @@ fn expand_field_accessor(
         #start + <#ty as Packed>::SIZE
     };
 
-    let ident = if let Some(accessor) = field.attributes.accessor.as_ref() {
-        accessor.clone()
-    } else if let Some(ident) = field.ident.as_ref() {
-        ident.clone()
-    } else {
-        syn::Ident::new(&format!("_{}", index), proc_macro2::Span::call_site())
+    let ident = match &field.attributes.accessor {
+        AccessorType::Ignore => return (quote! {}, end),
+        AccessorType::Custom(ident) => ident.clone(),
+        AccessorType::Default => {
+            if let Some(ident) = field.ident.as_ref() {
+                ident.clone()
+            } else {
+                syn::Ident::new(&format!("_{}", index), proc_macro2::Span::call_site())
+            }
+        }
     };
 
     let accessor = quote! {

@@ -2,9 +2,9 @@ use crate::{Error, Packed, Packet};
 use std::{any, fmt, hash, marker};
 
 /// view of a slice in memory as a packed structure of type `T`
-pub struct View<'a, T: ?Sized> {
+pub struct View<'a, T> {
     slice: &'a [u8],
-    marker: marker::PhantomData<T>,
+    marker: marker::PhantomData<fn() -> T>,
 }
 
 impl<'a, T> View<'a, T>

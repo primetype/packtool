@@ -1,5 +1,6 @@
 use syn::{
     parse::{Parse, ParseStream},
+    spanned::Spanned,
     Result,
 };
 
@@ -7,16 +8,28 @@ use syn::{
 pub struct PackedAttributes {
     pub value: Option<syn::Lit>,
     pub repr: Option<syn::Path>,
-    pub accessor: Option<syn::Ident>,
+    pub accessor: AccessorType,
+}
+
+pub enum AccessorType {
+    Default,
+    Ignore,
+    Custom(syn::Ident),
 }
 
 enum PackedAttribute {
     Value(syn::Lit),
     Repr(syn::Path),
-    Accessor(syn::Ident),
+    Accessor(proc_macro2::Span, AccessorType),
 }
 
 const ATTRIBUTE_LIST: &[&str] = &[PackedAttribute::VALUE, PackedAttribute::ACCESSOR];
+
+impl Default for AccessorType {
+    fn default() -> Self {
+        Self::Default
+    }
+}
 
 impl PackedAttributes {
     fn from_iter<T>(attributes: T) -> Result<Self>
@@ -40,14 +53,11 @@ impl PackedAttributes {
                     // case of enum with only unit variants
                     result.repr = Some(path);
                 }
-                PackedAttribute::Accessor(accessor) => {
-                    if result.accessor.is_some() {
-                        return Err(syn::Error::new_spanned(
-                            accessor,
-                            "The accessor has already been set",
-                        ));
+                PackedAttribute::Accessor(span, accessor) => {
+                    if !matches!(result.accessor, AccessorType::Default) {
+                        return Err(syn::Error::new(span, "The accessor has already been set"));
                     } else {
-                        result.accessor = Some(accessor);
+                        result.accessor = accessor;
                     }
                 }
             }
@@ -133,9 +143,16 @@ impl PackedAttribute {
                 if name_value.path.is_ident(Self::VALUE) {
                     Ok(Self::Value(name_value.lit))
                 } else if name_value.path.is_ident(Self::ACCESSOR) {
+                    let span = name_value.span();
                     if let syn::Lit::Str(ident) = name_value.lit {
                         let ident = syn::Ident::new(&ident.value(), ident.span());
-                        Ok(Self::Accessor(ident))
+                        Ok(Self::Accessor(span, AccessorType::Custom(ident)))
+                    } else if let syn::Lit::Bool(enabled) = name_value.lit {
+                        if enabled.value {
+                            Ok(Self::Accessor(span, AccessorType::Default))
+                        } else {
+                            Ok(Self::Accessor(span, AccessorType::Ignore))
+                        }
                     } else {
                         Err(syn::Error::new_spanned(
                             name_value,

@@ -8,7 +8,7 @@ use std::fmt;
 pub struct Version(i32);
 
 #[derive(Packed)]
-pub struct Hash([u8; 32]);
+pub struct Hash(#[packed(accessor = false)] [u8; 32]);
 
 #[derive(Packed, Debug)]
 pub struct None(u32);
