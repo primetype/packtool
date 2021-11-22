@@ -76,11 +76,6 @@ impl Parse for PackedVariant {
             None
         };
 
-        if discriminant.is_none() && attributes.value.is_some() {
-            dbg!(discriminant.is_none(), attributes.value.is_some());
-            todo!()
-        }
-
         Ok(Self {
             attributes,
             ident,

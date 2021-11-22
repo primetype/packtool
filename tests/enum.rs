@@ -13,6 +13,15 @@ enum TwoU8 {
     Two = 0x00FF00FF,
 }
 
+/*
+#[derive(Packed, Debug, PartialEq, Eq)]
+enum ThisOrThat {
+    #[packed(value = 0)]
+    This,
+    That(u32),
+}
+ */
+
 macro_rules! internal_mk_test {
     ($Type:ty => ($cstr:expr, $SLICE:expr)) => {{
         let view = View::<$Type>::try_from_slice($SLICE).unwrap();

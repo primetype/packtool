@@ -6,7 +6,7 @@ use syn::{
 
 #[derive(Default)]
 pub struct PackedAttributes {
-    pub value: Option<syn::Lit>,
+    pub value: Option<ValueType>,
     pub repr: Option<syn::Path>,
     pub accessor: AccessorType,
 }
@@ -17,8 +17,13 @@ pub enum AccessorType {
     Custom(syn::Ident),
 }
 
+pub enum ValueType {
+    Lit(syn::Lit),
+    Const(syn::Path),
+}
+
 enum PackedAttribute {
-    Value(syn::Lit),
+    Value(ValueType),
     Repr(syn::Path),
     Accessor(proc_macro2::Span, AccessorType),
 }
@@ -31,6 +36,15 @@ impl Default for AccessorType {
     }
 }
 
+impl ValueType {
+    pub fn span(&self) -> proc_macro2::Span {
+        match self {
+            Self::Lit(lit) => lit.span(),
+            Self::Const(con) => con.span(),
+        }
+    }
+}
+
 impl PackedAttributes {
     fn from_iter<T>(attributes: T) -> Result<Self>
     where
@@ -40,11 +54,11 @@ impl PackedAttributes {
 
         for attribute in attributes {
             match attribute {
-                PackedAttribute::Value(lit) => {
+                PackedAttribute::Value(value) => {
                     if result.value.is_some() {
-                        return Err(syn::Error::new_spanned(lit, "Value was already set"));
+                        return Err(syn::Error::new(value.span(), "Value was already set"));
                     } else {
-                        result.value = Some(lit);
+                        result.value = Some(value);
                     }
                 }
                 PackedAttribute::Repr(path) => {
@@ -132,8 +146,23 @@ impl PackedAttribute {
             meta @ syn::NestedMeta::Lit(_) => {
                 Err(syn::Error::new_spanned(meta, "Unexpected literal"))
             }
-            meta @ syn::NestedMeta::Meta(syn::Meta::List(_)) => {
-                Err(syn::Error::new_spanned(meta, "unexpected meta list"))
+            syn::NestedMeta::Meta(syn::Meta::List(list)) => {
+                if list.path.is_ident(Self::VALUE) {
+                    if list.nested.len() > 1 {
+                        Err(syn::Error::new_spanned(list, "expecting only one value"))
+                    } else if list.nested.is_empty() {
+                        Err(syn::Error::new_spanned(list, "expecting one value"))
+                    } else if let Some(syn::NestedMeta::Meta(syn::Meta::Path(path))) =
+                        list.nested.into_iter().next()
+                    {
+                        Ok(Self::Value(ValueType::Const(path)))
+                    } else {
+                        // we already tested when the list == 0 before
+                        unreachable!()
+                    }
+                } else {
+                    Err(syn::Error::new_spanned(list, "unexpected meta list"))
+                }
             }
             meta @ syn::NestedMeta::Meta(syn::Meta::Path(_)) if !is_repr => {
                 Err(syn::Error::new_spanned(meta, "unexpected meta path"))
@@ -141,7 +170,7 @@ impl PackedAttribute {
             syn::NestedMeta::Meta(syn::Meta::Path(path)) => Ok(Self::Repr(path)),
             syn::NestedMeta::Meta(syn::Meta::NameValue(name_value)) => {
                 if name_value.path.is_ident(Self::VALUE) {
-                    Ok(Self::Value(name_value.lit))
+                    Ok(Self::Value(ValueType::Lit(name_value.lit)))
                 } else if name_value.path.is_ident(Self::ACCESSOR) {
                     let span = name_value.span();
                     if let syn::Lit::Str(ident) = name_value.lit {

@@ -1,5 +1,12 @@
 use packtool::{Packed, View};
 
+/*
+const CONST_VALUE: u32 = 0x0011_2233u32;
+#[derive(Packed, PartialEq, Eq, Debug)]
+#[packed(value(CONST_VALUE))]
+struct StructConstValueUnit;
+*/
+
 #[derive(Packed, PartialEq, Eq, Debug)]
 #[packed(value = 1u8)]
 struct StructTupleUnit();

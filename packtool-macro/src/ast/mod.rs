@@ -8,7 +8,7 @@ mod packed_unit;
 
 pub use self::{
     container::{Container, Data},
-    packed_attributes::{AccessorType, PackedAttributes},
+    packed_attributes::{AccessorType, PackedAttributes, ValueType},
     packed_enum::{PackedEnum, PackedVariant},
     packed_field::PackedField,
     packed_structure::PackedStruct,

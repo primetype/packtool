@@ -4,7 +4,7 @@ use syn::Result;
 
 use crate::ast::{
     AccessorType, Container, Data, PackedAttributes, PackedEnum, PackedField, PackedStruct,
-    PackedTuple, PackedUnitOrigin, PackedVariant,
+    PackedTuple, PackedUnitOrigin, PackedVariant, ValueType,
 };
 
 pub fn packed_definitions(container: Container) -> TokenStream {
@@ -112,8 +112,8 @@ fn check_no_attribute_accessor(scope: &str, attributes: &PackedAttributes) -> Re
 
 fn check_no_attribute_value(scope: &str, attributes: &PackedAttributes) -> Result<()> {
     if let Some(value) = attributes.value.as_ref() {
-        return Err(syn::Error::new_spanned(
-            value,
+        return Err(syn::Error::new(
+            value.span(),
             format!("Cannot have a value associated to {scope}", scope = scope),
         ));
     }
@@ -150,6 +150,16 @@ fn expand_size_from_enumeration(enumeration: &PackedEnum) -> TokenStream {
         quote! { ::core::mem::size_of::<#ident>() }
     } else {
         todo!("variadic size enumeration not working yet")
+    }
+}
+
+fn expand_size_from_value_type(ident: &syn::Ident, value: &ValueType) -> TokenStream {
+    match value {
+        ValueType::Lit(lit) => expand_size_from_lit(ident, lit),
+        ValueType::Const(con) => {
+            //
+            quote! { ::std::mem::size_of_val(& #con) }
+        }
     }
 }
 
@@ -193,7 +203,7 @@ fn expand_size_from_lit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
 
 fn expand_size(container: &Container) -> TokenStream {
     match &container.data {
-        Data::Unit(_) => expand_size_from_lit(
+        Data::Unit(_) => expand_size_from_value_type(
             container.ident(),
             container
                 .attributes
@@ -204,6 +214,34 @@ fn expand_size(container: &Container) -> TokenStream {
         Data::Tuple(tuple) => expand_size_from_types(&tuple.fields),
         Data::Struct(structure) => expand_size_from_types(&structure.fields),
         Data::Enum(enumeration) => expand_size_from_enumeration(enumeration),
+    }
+}
+
+fn expand_check_data_unit_value(ident: &syn::Ident, value: &ValueType) -> TokenStream {
+    match value {
+        ValueType::Lit(lit) => expand_check_data_unit(ident, lit),
+        ValueType::Const(con) => {
+            quote! {
+                fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
+                    fn check_<C: Packed + ::std::fmt::Debug + PartialEq>(con: C, slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
+                        let value = <C as Packed>::unchecked_read_from_slice(slice);
+
+                        ::packtool::ensure!(
+                            #ident,
+                            value == con,
+                            "Invalid value, expected {expected:?} but received {received:?}",
+                            expected = con,
+                            received = slice,
+                        );
+
+                        Ok(())
+                    }
+
+                    check_(#con, slice)
+
+                }
+            }
+        }
     }
 }
 
@@ -397,6 +435,7 @@ where
 
     quote! {
         match #value {
+            #[allow(clippy::unused_unit)]
             # ( #discriminants )|* => {
                 ()
             }
@@ -456,7 +495,7 @@ fn expand_check_data_enumeration(repr: &syn::Path, enumeration: &PackedEnum) -> 
 
 fn expand_check(container: &Container) -> TokenStream {
     match &container.data {
-        Data::Unit(_) => expand_check_data_unit(
+        Data::Unit(_) => expand_check_data_unit_value(
             container.ident(),
             container
                 .attributes
@@ -633,6 +672,19 @@ fn expand_read_from_slice(container: &Container) -> TokenStream {
             container.ident(),
             enumeration,
         ),
+    }
+}
+
+fn expand_write_to_slice_data_unit_value(value: &ValueType) -> TokenStream {
+    match value {
+        ValueType::Lit(lit) => expand_write_to_slice_data_unit(lit),
+        ValueType::Const(con) => {
+            quote! {
+                fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
+                    #con.unchecked_write_to_slice(slice);
+                }
+            }
+        }
     }
 }
 
@@ -816,7 +868,7 @@ fn expand_write_to_slice_data_structure(structure: &PackedStruct) -> TokenStream
 fn expand_write_to_slice(container: &Container) -> TokenStream {
     match &container.data {
         Data::Unit(_) => {
-            expand_write_to_slice_data_unit(container.attributes.value.as_ref().unwrap())
+            expand_write_to_slice_data_unit_value(container.attributes.value.as_ref().unwrap())
         }
         Data::Tuple(tuple) => expand_write_to_slice_data_tuple(tuple),
         Data::Struct(structure) => expand_write_to_slice_data_structure(structure),
