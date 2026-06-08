@@ -48,12 +48,14 @@ where
 }
 
 impl<T> Borrow<[u8]> for Packet<T> {
+    #[inline]
     fn borrow(&self) -> &[u8] {
         self.boxed.borrow()
     }
 }
 
 impl<T> Clone for Packet<T> {
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             boxed: self.boxed.clone(),
@@ -63,12 +65,14 @@ impl<T> Clone for Packet<T> {
 }
 
 impl<T> AsRef<[u8]> for Packet<T> {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.boxed.as_ref()
     }
 }
 
 impl<T, U> PartialEq<Packet<U>> for Packet<T> {
+    #[inline]
     fn eq(&self, other: &Packet<U>) -> bool {
         self.boxed.eq(&other.boxed)
     }
@@ -77,18 +81,21 @@ impl<T, U> PartialEq<Packet<U>> for Packet<T> {
 impl<T> Eq for Packet<T> {}
 
 impl<T, U> PartialOrd<Packet<U>> for Packet<T> {
+    #[inline]
     fn partial_cmp(&self, other: &Packet<U>) -> Option<std::cmp::Ordering> {
         self.boxed.partial_cmp(&other.boxed)
     }
 }
 
 impl<T> Ord for Packet<T> {
+    #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.boxed.cmp(&other.boxed)
     }
 }
 
 impl<T> hash::Hash for Packet<T> {
+    #[inline]
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.boxed.hash(state);
         self.marker.hash(state);

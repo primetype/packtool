@@ -74,6 +74,7 @@ where
 }
 
 impl<'a, T> Clone for View<'a, T> {
+    #[inline]
     fn clone(&self) -> Self {
         *self
     }
@@ -82,12 +83,14 @@ impl<'a, T> Clone for View<'a, T> {
 impl<'a, T> Copy for View<'a, T> {}
 
 impl<'a, T> AsRef<[u8]> for View<'a, T> {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.slice
     }
 }
 
 impl<'a, 'b, T, U> PartialEq<View<'b, U>> for View<'a, T> {
+    #[inline]
     fn eq(&self, other: &View<'b, U>) -> bool {
         self.slice.eq(other.slice)
     }
@@ -96,18 +99,21 @@ impl<'a, 'b, T, U> PartialEq<View<'b, U>> for View<'a, T> {
 impl<'a, T> Eq for View<'a, T> {}
 
 impl<'a, 'b, T, U> PartialOrd<View<'b, U>> for View<'a, T> {
+    #[inline]
     fn partial_cmp(&self, other: &View<'b, U>) -> Option<std::cmp::Ordering> {
         self.slice.partial_cmp(other.slice)
     }
 }
 
 impl<'a, T> Ord for View<'a, T> {
+    #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.slice.cmp(other.slice)
     }
 }
 
 impl<'a, T> hash::Hash for View<'a, T> {
+    #[inline]
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.slice.hash(state);
         self.marker.hash(state);

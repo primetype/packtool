@@ -26,6 +26,7 @@ macro_rules! tuple_impls {
                 + <$T as Packed>::SIZE
             )+;
 
+            #[inline]
             fn check(slice: &[u8]) -> Result<(), Error> {
                 $(
                     <$T as Packed>::check(
@@ -50,6 +51,7 @@ macro_rules! tuple_impls {
                 );+
             }
 
+            #[inline]
             fn unchecked_read_from_slice(slice: &[u8]) -> Self {
                 (
                     $(
