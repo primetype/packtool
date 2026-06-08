@@ -115,6 +115,25 @@ pub union Choice {
 }
 ```
 
+Generic types are not supported and are rejected at compile time:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+pub struct Wrapper<T>(T);
+```
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+pub enum Either<L, R> {
+    Left(L),
+    Right(R),
+}
+```
+
 ## combining packed objects
 
 It is possible to compose packed objects in named or tuple structures.
