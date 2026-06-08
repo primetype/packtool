@@ -90,6 +90,19 @@ pub enum Color {
 }
 ```
 
+Enumerations with data-carrying variants are not supported yet and
+are rejected at compile time:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+pub enum ThisOrThat {
+    This,
+    That(u32),
+}
+```
+
 ## combining packed objects
 
 It is possible to compose packed objects in named or tuple structures.
