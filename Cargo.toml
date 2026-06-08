@@ -22,7 +22,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 hex = "0.4"
-packtool-macro = { path = "./packtool-macro", version = "0.3" }
+packtool-macro = { path = "./packtool-macro", version = "0.4" }
 thiserror = "2.0"
 
 [dev-dependencies]
