@@ -78,12 +78,15 @@ primitive_pack!(u16);
 primitive_pack!(u32);
 primitive_pack!(u64);
 primitive_pack!(u128);
-primitive_pack!(usize);
 primitive_pack!(i16);
 primitive_pack!(i32);
 primitive_pack!(i64);
 primitive_pack!(i128);
-primitive_pack!(isize);
+
+// `usize`/`isize` are intentionally NOT `Packed`: their width is
+// target-dependent (8 bytes on 64-bit, 4 on 32-bit), so packing them
+// would produce a non-portable wire layout. Use a fixed-width integer
+// (`u64`, `u32`, `i64`, `i32`, ...) instead.
 
 #[cfg(test)]
 mod tests {
