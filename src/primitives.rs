@@ -59,25 +59,14 @@ macro_rules! primitive_pack {
 
             #[inline]
             fn unchecked_read_from_slice(slice: &[u8]) -> Self {
-                #[cfg(debug_assertions)]
-                {
-                    match slice.try_into() {
-                        Ok(bytes) => <$t>::from_le_bytes(bytes),
-                        Err(error) => {
-                            panic!(
-                                "Failed read {ty} from slice: {error}",
-                                ty = ::core::any::type_name::<$t>(),
-                                error = error,
-                            )
-                        }
-                    }
-                }
-                #[cfg(not(debug_assertions))]
-                {
-                    if let Ok(bytes) = slice.as_ref().try_into() {
-                        <$t>::from_le_bytes(bytes)
-                    } else {
-                        unsafe { ::core::hint::unreachable_unchecked() }
+                match slice.try_into() {
+                    Ok(bytes) => <$t>::from_le_bytes(bytes),
+                    Err(error) => {
+                        panic!(
+                            "Failed read {ty} from slice: {error}",
+                            ty = ::core::any::type_name::<$t>(),
+                            error = error,
+                        )
                     }
                 }
             }
