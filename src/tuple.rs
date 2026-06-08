@@ -179,7 +179,7 @@ mod tests {
     use crate::View;
 
     macro_rules! mk_primitive_test {
-        ($f:ident, $Type:ty, $size:expr) => {
+        ($f:ident, $Type:ty, $size:expr_2021) => {
             #[quickcheck]
             fn $f(v: $Type) -> bool {
                 assert_eq!(<$Type as Packed>::SIZE, $size);

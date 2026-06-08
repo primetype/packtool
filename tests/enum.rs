@@ -23,7 +23,7 @@ enum ThisOrThat {
  */
 
 macro_rules! internal_mk_test {
-    ($Type:ty => ($cstr:expr, $SLICE:expr)) => {{
+    ($Type:ty => ($cstr:expr_2021, $SLICE:expr_2021)) => {{
         let view = View::<$Type>::try_from_slice($SLICE).unwrap();
         let variant: $Type = view.unpack();
         assert_eq!(variant, $cstr);
@@ -32,7 +32,7 @@ macro_rules! internal_mk_test {
         ($cstr).unchecked_write_to_slice(&mut slice);
         assert_eq!($SLICE, &slice);
     }};
-    ($Type:ty => ( $error:literal $SLICE:expr )) => {{
+    ($Type:ty => ( $error:literal $SLICE:expr_2021 )) => {{
         let err = View::<$Type>::try_from_slice($SLICE).unwrap_err();
 
         assert_eq!(err.to_string(), $error);

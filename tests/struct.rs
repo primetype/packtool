@@ -24,7 +24,7 @@ struct Struct2 {
 }
 
 macro_rules! internal_mk_test {
-    ($Type:ty => ($cstr:expr, $SLICE:expr)) => {{
+    ($Type:ty => ($cstr:expr_2021, $SLICE:expr_2021)) => {{
         let view = View::<$Type>::try_from_slice($SLICE).unwrap();
         let object: $Type = view.unpack();
         assert_eq!(object, $cstr);
@@ -33,7 +33,7 @@ macro_rules! internal_mk_test {
         ($cstr).unchecked_write_to_slice(&mut slice);
         assert_eq!($SLICE, &slice);
     }};
-    ($Type:ty => ( $SLICE:expr )) => {{
+    ($Type:ty => ( $SLICE:expr_2021 )) => {{
         let _err = View::<$Type>::try_from_slice($SLICE).unwrap_err();
     }};
 }

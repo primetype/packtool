@@ -48,7 +48,7 @@ mod tests {
     }
 
     macro_rules! mk_primitive_test {
-        ($f:ident, $SIZE:expr) => {
+        ($f:ident, $SIZE:expr_2021) => {
             #[quickcheck]
             fn $f(Array(v): Array<$SIZE>) -> bool {
                 let mut slice = [0; $SIZE];

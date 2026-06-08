@@ -28,7 +28,7 @@ use thiserror::Error;
 /// ```
 #[macro_export]
 macro_rules! ensure {
-    ($Type:ty, $assumption:expr, $fmt:expr, $($arg:tt)*) => {
+    ($Type:ty, $assumption:expr_2021, $fmt:expr_2021, $($arg:tt)*) => {
         if !$assumption {
             return ::std::result::Result::Err(
                 $crate::Error::Assumption {

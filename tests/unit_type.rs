@@ -108,7 +108,7 @@ const BAD_I128_SLICE: &[u8] = &[0; 16];
 const INVALID_SLICE: &[u8] = b"invalid slice of random length";
 
 macro_rules! internal_mk_test {
-    ($cstr:expr, $Type:ty, $SLICE:ident) => {{
+    ($cstr:expr_2021, $Type:ty, $SLICE:ident) => {{
         let tag = View::<$Type>::try_from_slice($SLICE).unwrap();
         let value: $Type = tag.unpack();
         assert_eq!(value, $cstr);
@@ -118,7 +118,7 @@ macro_rules! internal_mk_test {
 
         assert_eq!(slice, $SLICE);
     }};
-    ($cstr:expr, $Type:ty, ! $SLICE:ident $error:literal) => {{
+    ($cstr:expr_2021, $Type:ty, ! $SLICE:ident $error:literal) => {{
         let err = View::<$Type>::try_from_slice($SLICE).unwrap_err();
 
         assert_eq!(err.to_string(), $error);
@@ -127,7 +127,7 @@ macro_rules! internal_mk_test {
 
 macro_rules! mk_test {
     (
-        $cstr:expr,
+        $cstr:expr_2021,
         $name:ident<$Type:ty>(
             $( [ $($unit:tt)+ ] ),*
         )
