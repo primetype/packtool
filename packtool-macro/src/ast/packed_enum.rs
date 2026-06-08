@@ -38,6 +38,7 @@ impl Parse for PackedEnum {
 
         let _struct_token = input.parse()?;
         let ident = input.parse()?;
+        super::reject_generics(input)?;
         let _parentheses_token = syn::braced!(content in input);
         let variants = content.parse_terminated(PackedVariant::parse, Token![,])?;
 
