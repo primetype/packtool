@@ -75,6 +75,11 @@ fn check(container: &Container) -> Result<()> {
                         "Pure enumeration variants should have a repr(...) attributes to set the size",
                     ));
                 }
+            } else {
+                return Err(syn::Error::new_spanned(
+                    enumeration._struct_token,
+                    "packed enums with data-carrying variants are not supported yet",
+                ));
             }
         }
     }
