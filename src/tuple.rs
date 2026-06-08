@@ -7,9 +7,9 @@ use crate::{Error, Packed};
 
 macro_rules! range {
     ($($Pred:ident)* , $Type:ident) => {
-        ( $(<$Pred as Packed>::SIZE + )* 0)
+        $(<$Pred as Packed>::SIZE + )* 0
         ..
-        ( $(<$Pred as Packed>::SIZE + )* <$Type as Packed>::SIZE)
+        $(<$Pred as Packed>::SIZE + )* <$Type as Packed>::SIZE
     };
 }
 

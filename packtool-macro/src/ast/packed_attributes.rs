@@ -11,7 +11,9 @@ pub struct PackedAttributes {
     pub accessor: AccessorType,
 }
 
+#[derive(Default)]
 pub enum AccessorType {
+    #[default]
     Default,
     Ignore,
     Custom(syn::Ident),
@@ -29,12 +31,6 @@ enum PackedAttribute {
 }
 
 const ATTRIBUTE_LIST: &[&str] = &[PackedAttribute::VALUE, PackedAttribute::ACCESSOR];
-
-impl Default for AccessorType {
-    fn default() -> Self {
-        Self::Default
-    }
-}
 
 impl ValueType {
     pub fn span(&self) -> proc_macro2::Span {

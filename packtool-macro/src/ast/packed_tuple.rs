@@ -46,7 +46,7 @@ impl Parse for PackedTuple {
         let fields = content.parse_terminated(PackedField::parse_unnamed, Token![,])?;
         let _semi = input.parse()?;
 
-        #[allow(clippy::eval_order_dependence)]
+        #[allow(clippy::mixed_read_write_in_expression)]
         Ok(Self {
             _struct_token,
             ident,

@@ -75,10 +75,7 @@ where
 
 impl<'a, T> Clone for View<'a, T> {
     fn clone(&self) -> Self {
-        Self {
-            slice: self.slice,
-            marker: self.marker,
-        }
+        *self
     }
 }
 

@@ -13,7 +13,6 @@ pub struct PackedEnum {
 }
 
 pub struct PackedVariant {
-    pub attributes: PackedAttributes,
     pub ident: syn::Ident,
     pub fields: Punctuated<PackedField, Token!(,)>,
     pub discriminant: Option<(syn::token::Eq, syn::Expr)>,
@@ -53,7 +52,8 @@ impl Parse for PackedEnum {
 
 impl Parse for PackedVariant {
     fn parse(input: ParseStream) -> Result<Self> {
-        let attributes: PackedAttributes = input.parse()?;
+        // parse and discard variant attributes to consume the tokens
+        let _attributes: PackedAttributes = input.parse()?;
         let ident = input.parse()?;
 
         let fields = if input.peek(syn::token::Brace) {
@@ -77,7 +77,6 @@ impl Parse for PackedVariant {
         };
 
         Ok(Self {
-            attributes,
             ident,
             fields,
             discriminant,

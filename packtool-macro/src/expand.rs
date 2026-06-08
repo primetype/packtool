@@ -71,7 +71,7 @@ fn check(container: &Container) -> Result<()> {
                 check_only_enum_variants_have_discriminant(enumeration)?;
                 if container.attributes.repr.is_none() {
                     return Err(syn::Error::new_spanned(
-                        &enumeration._struct_token,
+                        enumeration._struct_token,
                         "Pure enumeration variants should have a repr(...) attributes to set the size",
                     ));
                 }

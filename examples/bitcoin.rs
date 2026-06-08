@@ -58,7 +58,7 @@ fn main() {
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut content = String::new();
-        for byte in self.0.iter().copied() {
+        for byte in self.0.iter() {
             content.push_str(&format!("{:02x}", byte));
         }
 
