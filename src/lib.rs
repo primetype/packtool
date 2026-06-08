@@ -103,6 +103,18 @@ pub enum ThisOrThat {
 }
 ```
 
+Unions cannot be packed and are rejected at compile time:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+pub union Choice {
+    a: u32,
+    b: f32,
+}
+```
+
 ## combining packed objects
 
 It is possible to compose packed objects in named or tuple structures.
