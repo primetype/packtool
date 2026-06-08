@@ -36,6 +36,12 @@ const CHAR_SLICE: &[u8] = b"a";
 const BAD_CHAR_SLICE: &[u8] = b"A";
 
 #[derive(Packed, PartialEq, Eq, Debug)]
+#[packed(value = b'A')]
+pub struct TagByte;
+const BYTE_SLICE: &[u8] = &[0x41];
+const BAD_BYTE_SLICE: &[u8] = &[0x42];
+
+#[derive(Packed, PartialEq, Eq, Debug)]
 #[packed(value = 0b0010_1010u8)]
 pub struct TagU8;
 const U8_SLICE: &[u8] = &[42];
@@ -171,6 +177,13 @@ mk_test!(
     [CHAR_SLICE],
     [!INVALID_SLICE "Invalid size for unit_type::TagChar: expected 1 bytes but received 30 bytes"],
     [!BAD_CHAR_SLICE "Assumption `c.chars().next() == Some(\'a\')` failed for unit_type::TagChar: Invalid UTF8 encoded char, expected a but received A"]
+));
+
+mk_test!(
+    TagByte, byte<TagByte>(
+    [BYTE_SLICE],
+    [!INVALID_SLICE "Invalid size for unit_type::TagByte: expected 1 bytes but received 30 bytes"],
+    [!BAD_BYTE_SLICE "Assumption `slice[0] == b\'A\'` failed for unit_type::TagByte: Invalid byte string, expected 41 but received 42"]
 ));
 
 mk_test!(TagU8, u8<TagU8>(
