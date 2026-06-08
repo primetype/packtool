@@ -5,7 +5,7 @@
 Rust's tooling to write packed objects. Objects that can be packed
 into specific serialization format of fixed size.
 
-Support rust from `1.51.0` onward.
+Requires Rust `1.96.0` or newer.
 
 # Example
 

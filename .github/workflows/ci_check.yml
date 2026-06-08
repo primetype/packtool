@@ -17,40 +17,27 @@ jobs:
         rust:
           - stable
           - beta
-          - 1.51.0  # Minimum supported rust version
+          - 1.96.0  # Minimum supported rust version
 
     steps:
       - name: "checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: "setup"
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
           components: rustfmt, clippy
 
       - name: "Build"
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
+        run: cargo build
 
       - name: "unit tests"
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --all-features
+        run: cargo test --all --all-features
 
       - name: "rustfmt"
         continue-on-error: true
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: "clippy"
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all --all-features -- --deny "clippy::all"
+        run: cargo clippy --all --all-features -- --deny "clippy::all"

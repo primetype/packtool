@@ -3,6 +3,7 @@ name = "packtool-macro"
 version = "0.3.0"
 authors = ["Nicolas Di Prima <nicolas@primetype.co.uk>"]
 edition = "2018"
+rust-version = "1.96"
 description = "In memory packing made easy: procedural macro definitions"
 homepage = "https://github.com/primetype/packtool"
 repository = "https://github.com/primetype/packtool/"
