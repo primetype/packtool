@@ -129,4 +129,14 @@ mod tests {
     mk_primitive_test!(i32, i32, 4);
     mk_primitive_test!(i64, i64, 8);
     mk_primitive_test!(i128, i128, 16);
+
+    // Reading a wrong-length slice must be a deterministic panic, never UB.
+    // u32 expects 4 bytes; feeding 2 must not read out of bounds. Before the
+    // fix this was `unreachable_unchecked()` in release builds (genuine UB
+    // reachable from safe code); it now panics in every build profile.
+    #[test]
+    #[should_panic]
+    fn read_short_slice_panics() {
+        let _ = <u32 as Packed>::unchecked_read_from_slice(&[0u8; 2]);
+    }
 }
