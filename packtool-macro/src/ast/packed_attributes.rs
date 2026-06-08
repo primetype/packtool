@@ -86,18 +86,13 @@ impl Parse for PackedAttributes {
         let attributes = input
             .call(syn::Attribute::parse_outer)?
             .into_iter()
-            .filter(|attr| attr.path.is_ident("packed") || attr.path.is_ident("repr"))
-            .map(|attr| attr.parse_meta())
-            .collect::<Result<Vec<_>>>()?
+            .filter(|attr| attr.path().is_ident("packed") || attr.path().is_ident("repr"))
+            .map(|attr| PackedAttribute::from(attr.meta))
+            .collect::<Result<Vec<Vec<_>>>>()?
             .into_iter()
-            .map(PackedAttribute::from);
+            .flatten();
 
-        PackedAttributes::from_iter(
-            attributes
-                .collect::<Result<Vec<Vec<_>>>>()?
-                .into_iter()
-                .flatten(),
-        )
+        PackedAttributes::from_iter(attributes)
     }
 }
 
@@ -122,11 +117,15 @@ impl PackedAttribute {
                 ),
             )),
             syn::Meta::List(meta_list) => {
-                let mut list = Vec::with_capacity(meta_list.nested.len());
-
                 let is_repr = meta_list.path.is_ident("repr");
 
-                for entry in meta_list.nested.into_iter() {
+                let nested = meta_list.parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                )?;
+
+                let mut list = Vec::with_capacity(nested.len());
+
+                for entry in nested.into_iter() {
                     list.push(Self::from_nested(is_repr, entry).map_err(|mut err| {
                         err.combine(syn::Error::new(
                             err.span(),
@@ -141,42 +140,51 @@ impl PackedAttribute {
         }
     }
 
-    fn from_nested(is_repr: bool, nested: syn::NestedMeta) -> Result<Self> {
+    fn from_nested(is_repr: bool, nested: syn::Meta) -> Result<Self> {
         match nested {
-            meta @ syn::NestedMeta::Lit(_) => {
-                Err(syn::Error::new_spanned(meta, "Unexpected literal"))
-            }
-            syn::NestedMeta::Meta(syn::Meta::List(list)) => {
+            syn::Meta::List(list) => {
                 if list.path.is_ident(Self::VALUE) {
-                    if list.nested.len() > 1 {
+                    let inner = list.parse_args_with(
+                        syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                    )?;
+                    if inner.len() > 1 {
                         Err(syn::Error::new_spanned(list, "expecting only one value"))
-                    } else if list.nested.is_empty() {
+                    } else if inner.is_empty() {
                         Err(syn::Error::new_spanned(list, "expecting one value"))
-                    } else if let Some(syn::NestedMeta::Meta(syn::Meta::Path(path))) =
-                        list.nested.into_iter().next()
-                    {
+                    } else if let Some(syn::Meta::Path(path)) = inner.into_iter().next() {
                         Ok(Self::Value(ValueType::Const(path)))
                     } else {
-                        // we already tested when the list == 0 before
-                        unreachable!()
+                        Err(syn::Error::new_spanned(
+                            list,
+                            "expecting a constant path as value",
+                        ))
                     }
                 } else {
                     Err(syn::Error::new_spanned(list, "unexpected meta list"))
                 }
             }
-            meta @ syn::NestedMeta::Meta(syn::Meta::Path(_)) if !is_repr => {
+            meta @ syn::Meta::Path(_) if !is_repr => {
                 Err(syn::Error::new_spanned(meta, "unexpected meta path"))
             }
-            syn::NestedMeta::Meta(syn::Meta::Path(path)) => Ok(Self::Repr(path)),
-            syn::NestedMeta::Meta(syn::Meta::NameValue(name_value)) => {
+            syn::Meta::Path(path) => Ok(Self::Repr(path)),
+            syn::Meta::NameValue(name_value) => {
+                let lit = match &name_value.value {
+                    syn::Expr::Lit(syn::ExprLit { lit, .. }) => lit.clone(),
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            other,
+                            "expecting a literal value",
+                        ))
+                    }
+                };
                 if name_value.path.is_ident(Self::VALUE) {
-                    Ok(Self::Value(ValueType::Lit(name_value.lit)))
+                    Ok(Self::Value(ValueType::Lit(lit)))
                 } else if name_value.path.is_ident(Self::ACCESSOR) {
                     let span = name_value.span();
-                    if let syn::Lit::Str(ident) = name_value.lit {
+                    if let syn::Lit::Str(ident) = lit {
                         let ident = syn::Ident::new(&ident.value(), ident.span());
                         Ok(Self::Accessor(span, AccessorType::Custom(ident)))
-                    } else if let syn::Lit::Bool(enabled) = name_value.lit {
+                    } else if let syn::Lit::Bool(enabled) = lit {
                         if enabled.value {
                             Ok(Self::Accessor(span, AccessorType::Default))
                         } else {

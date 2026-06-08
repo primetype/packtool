@@ -42,7 +42,7 @@ impl Parse for PackedStruct {
         let _struct_token = input.parse()?;
         let ident = input.parse()?;
         let _parentheses_token = syn::braced!(content in input);
-        let fields = content.parse_terminated(PackedField::parse_named)?;
+        let fields = content.parse_terminated(PackedField::parse_named, Token![,])?;
 
         Ok(Self {
             _struct_token,

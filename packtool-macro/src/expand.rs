@@ -198,6 +198,7 @@ fn expand_size_from_lit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
         syn::Lit::Verbatim(_) => {
             syn::Error::new_spanned(value, "verbatim values are not supported").to_compile_error()
         }
+        _ => syn::Error::new_spanned(value, "unsupported literal value").to_compile_error(),
     }
 }
 
@@ -352,6 +353,7 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
         syn::Lit::Verbatim(_) => {
             syn::Error::new_spanned(value, "verbatim values are not supported").to_compile_error()
         }
+        _ => syn::Error::new_spanned(value, "unsupported literal value").to_compile_error(),
     }
 }
 
@@ -745,6 +747,7 @@ fn expand_write_to_slice_data_unit(value: &syn::Lit) -> TokenStream {
         syn::Lit::Verbatim(_) => {
             syn::Error::new_spanned(value, "verbatim values are not supported").to_compile_error()
         }
+        _ => syn::Error::new_spanned(value, "unsupported literal value").to_compile_error(),
     }
 }
 

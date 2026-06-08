@@ -40,7 +40,7 @@ impl Parse for PackedEnum {
         let _struct_token = input.parse()?;
         let ident = input.parse()?;
         let _parentheses_token = syn::braced!(content in input);
-        let variants = content.parse_terminated(PackedVariant::parse)?;
+        let variants = content.parse_terminated(PackedVariant::parse, Token![,])?;
 
         Ok(Self {
             _struct_token,
@@ -59,11 +59,11 @@ impl Parse for PackedVariant {
         let fields = if input.peek(syn::token::Brace) {
             let content;
             let _brace_token = syn::braced!(content in input);
-            content.parse_terminated(PackedField::parse_named)?
+            content.parse_terminated(PackedField::parse_named, Token![,])?
         } else if input.peek(syn::token::Paren) {
             let content;
             let _brace_token = syn::parenthesized!(content in input);
-            content.parse_terminated(PackedField::parse_unnamed)?
+            content.parse_terminated(PackedField::parse_unnamed, Token![,])?
         } else {
             Punctuated::new()
         };
