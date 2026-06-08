@@ -577,7 +577,7 @@ where
     quote! {
         match #value {
             #( #discriminants ),*
-            _ => panic!("Invalid discriminant"),
+            _ => ::core::panic!("Invalid discriminant"),
         }
     }
 }
@@ -721,7 +721,7 @@ fn expand_write_to_slice_data_unit(value: &syn::Lit) -> TokenStream {
         syn::Lit::Char(char) => {
             quote! {
                 fn unchecked_write_to_slice(&self, slice: &mut [u8]) {
-                    slice.copy_from_slice(String::from(#char).as_bytes());
+                    slice.copy_from_slice(#char.encode_utf8(&mut [0u8; 4]).as_bytes());
                 }
             }
         }
