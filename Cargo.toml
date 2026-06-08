@@ -1,6 +1,6 @@
 [package]
 name = "packtool"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Nicolas Di Prima <nicolas@primetype.co.uk>"]
 edition = "2024"
 rust-version = "1.96"
