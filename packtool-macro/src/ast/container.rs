@@ -76,7 +76,10 @@ impl Parse for Data {
                 Ok(Data::Enum(enumeration))
             }
         } else if input.peek(Token!(union)) {
-            todo!("learn to parse union")
+            Err(syn::Error::new(
+                input.span(),
+                "packtool cannot derive `Packed` for unions",
+            ))
         } else {
             Err(syn::Error::new(input.span(), "not handled by `packtool`"))
         }
