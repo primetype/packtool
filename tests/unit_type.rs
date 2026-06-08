@@ -183,7 +183,7 @@ mk_test!(
     TagByte, byte<TagByte>(
     [BYTE_SLICE],
     [!INVALID_SLICE "Invalid size for unit_type::TagByte: expected 1 bytes but received 30 bytes"],
-    [!BAD_BYTE_SLICE "Assumption `slice[0] == b\'A\'` failed for unit_type::TagByte: Invalid byte string, expected 41 but received 42"]
+    [!BAD_BYTE_SLICE "Assumption `slice [0] == b\'A\'` failed for unit_type::TagByte: Invalid byte string, expected 41 but received 42"]
 ));
 
 mk_test!(TagU8, u8<TagU8>(

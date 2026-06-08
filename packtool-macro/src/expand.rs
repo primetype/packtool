@@ -283,7 +283,7 @@ fn expand_check_data_unit(ident: &syn::Ident, value: &syn::Lit) -> TokenStream {
                 fn check(slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
                     ::packtool::ensure!(
                         #ident,
-                        slice[0] == Some(#byte),
+                        slice[0] == #byte,
                         "Invalid byte string, expected {expected:X} but received {received:X}",
                         expected = #byte,
                         received = slice[0],
