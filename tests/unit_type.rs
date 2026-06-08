@@ -1,11 +1,11 @@
 use packtool::{Packed, View};
 
-/*
 const CONST_VALUE: u32 = 0x0011_2233u32;
 #[derive(Packed, PartialEq, Eq, Debug)]
 #[packed(value(CONST_VALUE))]
 struct StructConstValueUnit;
-*/
+const CONST_VALUE_SLICE: &[u8] = &[0x33, 0x22, 0x11, 0x00];
+const BAD_CONST_VALUE_SLICE: &[u8] = &[0x33, 0x20, 0x11, 0x00];
 
 #[derive(Packed, PartialEq, Eq, Debug)]
 #[packed(value = 1u8)]
@@ -144,6 +144,14 @@ macro_rules! mk_test {
         }
     };
 }
+
+mk_test!(
+    StructConstValueUnit,
+    struct_const_value_unit<StructConstValueUnit>(
+    [CONST_VALUE_SLICE],
+    [!INVALID_SLICE "Invalid size for unit_type::StructConstValueUnit: expected 4 bytes but received 30 bytes"],
+    [!BAD_CONST_VALUE_SLICE "Assumption `value == con` failed for unit_type::StructConstValueUnit: Invalid value, expected 1122867 but received [51, 32, 17, 0]"]
+));
 
 mk_test!(
     StructTupleUnit (),
