@@ -115,7 +115,24 @@ pub union Choice {
 }
 ```
 
-Generic types are not supported and are rejected at compile time:
+Type-parameter generics are supported on **named** structs. The packed layout
+and `SIZE` are computed through `<T as Packed>::SIZE`, and a `T: Packed` bound is
+injected for every type parameter (composing with any `where` clause you write):
+
+```
+use packtool::Packed;
+
+#[derive(Packed)]
+pub struct Log<T> {
+    parent_id: [u8; 64],
+    content: T,
+    signature: [u8; 64],
+}
+
+# assert_eq!(<Log<u32> as Packed>::SIZE, 64 + 4 + 64);
+```
+
+Generics on enums and on tuple structs are still rejected at compile time:
 
 ```compile_fail
 use packtool::Packed;
@@ -132,6 +149,16 @@ pub enum Either<L, R> {
     Left(L),
     Right(R),
 }
+```
+
+A generic struct with no fields is rejected too: its type parameters could not
+appear in the (empty) packed layout.
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+pub struct Empty<T> {}
 ```
 
 ## combining packed objects

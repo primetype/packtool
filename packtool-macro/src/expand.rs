@@ -20,12 +20,38 @@ pub fn packed_definitions(container: Container) -> TokenStream {
     let unchecked_write_to_slice = expand_write_to_slice(&container);
     let accessors = expand_accessors(&container);
 
+    // Capture the type's generics and, for every type parameter, inject a
+    // `T: Packed` bound into the where-clause — the standard `derive` pattern.
+    // That makes `<T as Packed>::SIZE` and the read/write/check calls valid in
+    // the generated body. For concrete types `generics` is empty, so
+    // `split_for_impl()` yields nothing and the output is unchanged.
+    //
+    // LIFETIMES: we only bind type parameters here. A `Packed` type OWNS its
+    // bytes — `unchecked_read_from_slice` reconstructs an owned `Self` from a
+    // slice, and there are no borrowing fields — so a lifetime parameter cannot
+    // meaningfully appear on a `Packed` struct: any `&'a _` field would itself
+    // have to be `Packed`, which borrows do not implement. We therefore neither
+    // bind nor special-case lifetimes; a lifetime-bearing field simply fails the
+    // `T: Packed` requirement on that field, as it should.
+    let mut generics = container.generics();
+    let type_param_idents: Vec<syn::Ident> =
+        generics.type_params().map(|tp| tp.ident.clone()).collect();
+    if !type_param_idents.is_empty() {
+        let where_clause = generics.make_where_clause();
+        for ident in &type_param_idents {
+            where_clause
+                .predicates
+                .push(syn::parse_quote!(#ident: ::packtool::Packed));
+        }
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
     quote! {
-        impl #ident {
+        impl #impl_generics #ident #ty_generics #where_clause {
             #accessors
         }
 
-        impl Packed for #ident {
+        impl #impl_generics Packed for #ident #ty_generics #where_clause {
             const SIZE: usize = #size;
 
             #unchecked_read_from_slice

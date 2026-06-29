@@ -1,13 +1,14 @@
 use crate::ast::{PackedField, PackedUnit, PackedUnitOrigin};
 use syn::{
+    Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Result, Token,
 };
 
 pub struct PackedStruct {
     pub _struct_token: Token!(struct),
     pub ident: syn::Ident,
+    pub generics: syn::Generics,
     pub _parentheses_token: syn::token::Brace,
     pub fields: Punctuated<PackedField, Token!(,)>,
 }
@@ -32,6 +33,10 @@ impl PackedStruct {
             _semi: syn::token::Semi::default(),
             from: PackedUnitOrigin::Brace,
         }
+        // NOTE: this only ever runs for a *non-generic* empty struct. An empty
+        // struct that still carries generics is rejected upstream in
+        // `Data::parse` (its type parameters could not appear in the layout),
+        // so no generics are silently dropped here.
     }
 }
 
@@ -41,13 +46,19 @@ impl Parse for PackedStruct {
 
         let _struct_token = input.parse()?;
         let ident = input.parse()?;
-        super::reject_generics(input)?;
+        // Type-parameter generics on STRUCTS are supported (the layout/`SIZE`
+        // are computed from `<T as Packed>::SIZE`, all slice-based). Parse the
+        // generic parameter list and the optional `where` clause (which for a
+        // braced struct precedes the body).
+        let mut generics: syn::Generics = input.parse()?;
+        generics.where_clause = input.parse()?;
         let _parentheses_token = syn::braced!(content in input);
         let fields = content.parse_terminated(PackedField::parse_named, Token![,])?;
 
         Ok(Self {
             _struct_token,
             ident,
+            generics,
             _parentheses_token,
             fields,
         })

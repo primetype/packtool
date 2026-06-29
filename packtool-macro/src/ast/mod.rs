@@ -1,4 +1,4 @@
-use syn::{parse::ParseStream, Result, Token};
+use syn::{Result, Token, parse::ParseStream};
 
 mod container;
 mod packed_attributes;
@@ -8,15 +8,20 @@ mod packed_structure;
 mod packed_tuple;
 mod packed_unit;
 
-/// packtool only supports concrete (non-generic) types: the packed layout
-/// and `SIZE` are fixed at the type level. Detect a generic parameter list
-/// following the type name and reject it with a clear error rather than
-/// letting parsing fail later with a cryptic "expected curly braces".
+/// Reject type-parameter generics on an enum.
+///
+/// Type-parameter generics ARE supported on named structs (the layout and
+/// `SIZE` are computed through `<T as Packed>::SIZE`; see `PackedStruct`).
+/// Enums remain concrete — their discriminant layout is fixed at the type
+/// level — so a generic parameter list following the enum name is rejected
+/// here with a clear error rather than failing later with a cryptic
+/// "expected curly braces". (A generic tuple struct is routed to the struct
+/// parser, where the missing brace after `<...>` rejects it.)
 pub(crate) fn reject_generics(input: ParseStream) -> Result<()> {
     if input.peek(Token![<]) {
         Err(syn::Error::new(
             input.span(),
-            "packtool cannot derive `Packed` for generic types",
+            "packtool cannot derive `Packed` for generic enums",
         ))
     } else {
         Ok(())
