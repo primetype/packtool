@@ -1,8 +1,8 @@
 use crate::ast::{PackedAttributes, PackedField};
 use syn::{
+    Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Result, Token,
 };
 
 pub struct PackedEnum {

@@ -1,5 +1,5 @@
 use crate::ast::PackedAttributes;
-use syn::{parse::ParseStream, Result, Token};
+use syn::{Result, Token, parse::ParseStream};
 
 pub struct PackedField {
     pub attributes: PackedAttributes,

@@ -1,7 +1,7 @@
 use syn::{
+    Result,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Result,
 };
 
 #[derive(Default)]
@@ -167,10 +167,7 @@ impl PackedAttribute {
                 let lit = match &name_value.value {
                     syn::Expr::Lit(syn::ExprLit { lit, .. }) => lit.clone(),
                     other => {
-                        return Err(syn::Error::new_spanned(
-                            other,
-                            "expecting a literal value",
-                        ))
+                        return Err(syn::Error::new_spanned(other, "expecting a literal value"));
                     }
                 };
                 if name_value.path.is_ident(Self::VALUE) {

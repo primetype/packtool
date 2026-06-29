@@ -1,6 +1,6 @@
 use syn::{
-    parse::{Parse, ParseStream},
     Result, Token,
+    parse::{Parse, ParseStream},
 };
 
 pub enum PackedUnitOrigin {

@@ -1,8 +1,8 @@
 use crate::ast::{PackedField, PackedUnit, PackedUnitOrigin};
 use syn::{
+    Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Result, Token,
 };
 
 pub struct PackedTuple {
