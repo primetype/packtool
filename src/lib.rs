@@ -219,6 +219,44 @@ pub enum Selector {
 }
 ```
 
+`#[packed(fallback)]` is only valid on an enum variant; on any other scope it is
+rejected rather than silently ignored — on the enum container itself:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+#[repr(u16)]
+#[packed(fallback)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+}
+```
+
+on a struct:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+#[packed(fallback)]
+pub struct NotAnEnum {
+    a: u32,
+}
+```
+
+or on a field:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+pub struct NotAnEnum {
+    #[packed(fallback)]
+    a: u32,
+}
+```
+
 Unions cannot be packed and are rejected at compile time:
 
 ```compile_fail

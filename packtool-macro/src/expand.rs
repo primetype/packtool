@@ -66,6 +66,7 @@ fn check(container: &Container) -> Result<()> {
     match &container.data {
         Data::Unit(unit) => {
             check_no_attribute_accessor("Unit", &container.attributes)?;
+            check_no_attribute_fallback("Unit", &container.attributes)?;
             // all unit types need to have a value associated
             if container.attributes.value.is_none() {
                 return Err(syn::Error::new_spanned(
@@ -83,16 +84,22 @@ fn check(container: &Container) -> Result<()> {
                 "an unnamed struct (parenthesis struct)",
                 &container.attributes,
             )?;
+            check_no_attribute_fallback(
+                "an unnamed struct (parenthesis struct)",
+                &container.attributes,
+            )?;
             check_no_value_in_field(&t.fields)?;
         }
         Data::Struct(s) => {
             check_no_attribute_value("a named struct (braced struct)", &container.attributes)?;
             check_no_attribute_accessor("a named struct (braced struct)", &container.attributes)?;
+            check_no_attribute_fallback("a named struct (braced struct)", &container.attributes)?;
             check_no_value_in_field(&s.fields)?;
         }
         Data::Enum(enumeration) => {
             check_no_attribute_value("an enum", &container.attributes)?;
             check_no_attribute_accessor("an enum", &container.attributes)?;
+            check_no_attribute_fallback("an enum", &container.attributes)?;
             check_enum(container, enumeration)?;
         }
     }
@@ -227,12 +234,27 @@ fn check_no_attribute_value(scope: &str, attributes: &PackedAttributes) -> Resul
     Ok(())
 }
 
+/// Reject `#[packed(fallback)]` anywhere it is not a meaningful catch-all: it is
+/// only valid on an enum variant, so on any other scope (a struct, tuple, unit,
+/// the enum container itself, or a field) it would otherwise be silently ignored.
+/// Mirrors `check_no_attribute_value` / `check_no_attribute_accessor`.
+fn check_no_attribute_fallback(scope: &str, attributes: &PackedAttributes) -> Result<()> {
+    if attributes.fallback {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!("`#[packed(fallback)]` is only valid on an enum variant, not on {scope}"),
+        ));
+    }
+    Ok(())
+}
+
 fn check_no_value_in_field<'a, I>(fields: I) -> Result<()>
 where
     I: IntoIterator<Item = &'a PackedField>,
 {
     for field in fields {
         check_no_attribute_value("a field of a structure", &field.attributes)?;
+        check_no_attribute_fallback("a field of a structure", &field.attributes)?;
     }
 
     Ok(())
