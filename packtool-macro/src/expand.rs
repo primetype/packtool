@@ -93,30 +93,54 @@ fn check(container: &Container) -> Result<()> {
         Data::Enum(enumeration) => {
             check_no_attribute_value("an enum", &container.attributes)?;
             check_no_attribute_accessor("an enum", &container.attributes)?;
-            if enumeration.only_unit_variants() {
-                check_only_enum_variants_have_discriminant(enumeration)?;
-                if container.attributes.repr.is_none() {
-                    return Err(syn::Error::new_spanned(
-                        enumeration._struct_token,
-                        "Pure enumeration variants should have a repr(...) attributes to set the size",
-                    ));
-                }
-            } else {
-                return Err(syn::Error::new_spanned(
-                    enumeration._struct_token,
-                    "packed enums with data-carrying variants are not supported yet",
-                ));
-            }
+            check_enum(container, enumeration)?;
         }
     }
 
     Ok(())
 }
 
-fn check_only_enum_variants_have_discriminant(enumeration: &PackedEnum) -> Result<()> {
-    assert!(enumeration.only_unit_variants());
+/// Validate a packed enum.
+///
+/// The supported shapes are:
+///
+/// * a pure unit enum — every variant is a unit with an explicit discriminant
+///   and the enum carries a `#[repr(...)]` (the historical behaviour); or
+/// * the above PLUS at most one catch-all `#[packed(fallback)]` variant, which
+///   must be a single-field tuple variant with NO discriminant, whose field
+///   type is exactly the `#[repr(...)]` integer type.
+///
+/// Any other shape — a data-carrying non-fallback variant, more than one
+/// fallback, a fallback of the wrong arity, or a fallback whose field type does
+/// not match the repr — is rejected here at compile time.
+fn check_enum(container: &Container, enumeration: &PackedEnum) -> Result<()> {
+    // at most one fallback variant.
+    let fallbacks: Vec<&PackedVariant> = enumeration
+        .variants
+        .iter()
+        .filter(|v| v.attributes.fallback)
+        .collect();
+    if let Some(extra) = fallbacks.get(1) {
+        return Err(syn::Error::new_spanned(
+            &extra.ident,
+            "packed enums may declare at most one #[packed(fallback)] variant",
+        ));
+    }
+    let fallback = fallbacks.first().copied();
 
-    for variant in enumeration.variants.iter() {
+    // every non-fallback variant must be a unit variant with an explicit
+    // discriminant — unchanged from the historical behaviour.
+    for variant in enumeration
+        .variants
+        .iter()
+        .filter(|v| !v.attributes.fallback)
+    {
+        if !variant.fields.is_empty() {
+            return Err(syn::Error::new_spanned(
+                enumeration._struct_token,
+                "packed enums with data-carrying variants are not supported yet",
+            ));
+        }
         if variant.discriminant.is_none() {
             return Err(syn::Error::new_spanned(
                 &variant.ident,
@@ -125,7 +149,59 @@ fn check_only_enum_variants_have_discriminant(enumeration: &PackedEnum) -> Resul
         }
     }
 
+    // every packed enum needs a repr to fix its wire size.
+    let repr = match container.attributes.repr.as_ref() {
+        Some(repr) => repr,
+        None => {
+            return Err(syn::Error::new_spanned(
+                enumeration._struct_token,
+                "Pure enumeration variants should have a repr(...) attributes to set the size",
+            ));
+        }
+    };
+
+    // validate the fallback variant's shape.
+    if let Some(fallback) = fallback {
+        if fallback.discriminant.is_some() {
+            return Err(syn::Error::new_spanned(
+                &fallback.ident,
+                "a #[packed(fallback)] variant must not declare a discriminant",
+            ));
+        }
+        if fallback.fields.len() != 1 {
+            return Err(syn::Error::new_spanned(
+                &fallback.ident,
+                "a #[packed(fallback)] variant must be a single-field tuple variant carrying the #[repr(...)] integer",
+            ));
+        }
+        let field = fallback
+            .fields
+            .first()
+            .expect("the fallback variant has exactly one field");
+        if !fallback_field_matches_repr(&field.ty, repr) {
+            return Err(syn::Error::new_spanned(
+                &field.ty,
+                "a #[packed(fallback)] variant's field type must be the same integer type as the enum's #[repr(...)]",
+            ));
+        }
+    }
+
     Ok(())
+}
+
+/// `true` when the fallback field's type is exactly the repr integer type
+/// (e.g. `Other(u16)` for `#[repr(u16)]`).
+fn fallback_field_matches_repr(ty: &syn::Type, repr: &syn::Path) -> bool {
+    let repr_ident = match repr.get_ident() {
+        Some(ident) => ident,
+        None => return false,
+    };
+    match ty {
+        syn::Type::Path(type_path) if type_path.qself.is_none() => {
+            type_path.path.is_ident(repr_ident)
+        }
+        _ => false,
+    }
 }
 
 fn check_no_attribute_accessor(scope: &str, attributes: &PackedAttributes) -> Result<()> {
@@ -170,13 +246,18 @@ where
     quote! { #( < #fields as Packed >::SIZE )+* }
 }
 
-fn expand_size_from_enumeration(enumeration: &PackedEnum) -> TokenStream {
+fn expand_size_from_enumeration(repr: &syn::Path, enumeration: &PackedEnum) -> TokenStream {
     assert!(
         !enumeration.variants.is_empty(),
         "unit enums should have been converted to a packed_unit"
     );
 
-    if enumeration.only_unit_variants() {
+    if enumeration.fallback_variant().is_some() {
+        // a data-carrying fallback variant inflates `size_of::<Enum>()`, so the
+        // wire size is taken from the repr integer width instead — the fallback
+        // carries exactly the repr int and no extra bytes.
+        quote! { ::core::mem::size_of::<#repr>() }
+    } else if enumeration.only_unit_variants() {
         let ident = enumeration.ident();
         quote! { ::core::mem::size_of::<#ident>() }
     } else {
@@ -245,7 +326,14 @@ fn expand_size(container: &Container) -> TokenStream {
         ),
         Data::Tuple(tuple) => expand_size_from_types(&tuple.fields),
         Data::Struct(structure) => expand_size_from_types(&structure.fields),
-        Data::Enum(enumeration) => expand_size_from_enumeration(enumeration),
+        Data::Enum(enumeration) => expand_size_from_enumeration(
+            container
+                .attributes
+                .repr
+                .as_ref()
+                .expect("Should have a repr on every enums"),
+            enumeration,
+        ),
     }
 }
 
@@ -512,6 +600,16 @@ fn expand_check_data_structure(structure: &PackedStruct) -> TokenStream {
 }
 
 fn expand_check_data_enumeration(repr: &syn::Path, enumeration: &PackedEnum) -> TokenStream {
+    if enumeration.fallback_variant().is_some() {
+        // with a fallback every repr value is valid: an unknown discriminant
+        // simply decodes into the catch-all variant carrying the raw integer.
+        return quote! {
+            fn check(_slice: &[u8]) -> ::std::result::Result<(), ::packtool::Error> {
+                Ok(())
+            }
+        };
+    }
+
     let variants = expand_check_data_variants(repr, &enumeration.variants);
 
     quote! {
@@ -563,17 +661,20 @@ fn expand_read_from_slice_data_unit(ident: &syn::Ident, from: &PackedUnitOrigin)
     }
 }
 
-fn expand_read_from_slice_data_variants<'a, I>(
+fn expand_read_from_slice_data_variants(
     repr: &syn::Path,
     ident: &syn::Ident,
-    variants: I,
-) -> TokenStream
-where
-    I: IntoIterator<Item = &'a PackedVariant>,
-{
+    enumeration: &PackedEnum,
+) -> TokenStream {
+    let fallback = enumeration.fallback_variant();
+
     let mut discriminants = Vec::new();
 
-    for variant in variants.into_iter() {
+    for variant in enumeration
+        .variants
+        .iter()
+        .filter(|v| !v.attributes.fallback)
+    {
         let (_, discriminant) = if let Some(discriminant) = variant.discriminant.as_ref() {
             discriminant
         } else {
@@ -600,10 +701,20 @@ where
         }
     };
 
+    // an unknown discriminant either decodes into the fallback variant carrying
+    // the raw repr integer, or — with no fallback — is unreachable because
+    // `check` already rejected it.
+    let default = if let Some(fallback) = fallback {
+        let fallback = &fallback.ident;
+        quote! { unknown => { #ident :: #fallback ( unknown ) } }
+    } else {
+        quote! { _ => ::core::panic!("Invalid discriminant") }
+    };
+
     quote! {
         match #value {
-            #( #discriminants ),*
-            _ => ::core::panic!("Invalid discriminant"),
+            #( #discriminants )*
+            #default
         }
     }
 }
@@ -613,7 +724,7 @@ fn expand_read_from_slice_data_enumeration(
     ident: &syn::Ident,
     enumeration: &PackedEnum,
 ) -> TokenStream {
-    let variants = expand_read_from_slice_data_variants(repr, ident, &enumeration.variants);
+    let variants = expand_read_from_slice_data_variants(repr, ident, enumeration);
 
     quote! {
         fn unchecked_read_from_slice(slice: &[u8]) -> Self {
@@ -782,23 +893,38 @@ fn expand_write_to_slice_data_unit(value: &syn::Lit) -> TokenStream {
     }
 }
 
-fn expand_write_to_slice_data_variants<'a, I>(
+fn expand_write_to_slice_data_variants(
     repr: &syn::Path,
     ident: &syn::Ident,
-    variants: I,
-) -> TokenStream
-where
-    I: IntoIterator<Item = &'a PackedVariant>,
-{
+    enumeration: &PackedEnum,
+) -> TokenStream {
     let mut discriminants = Vec::new();
 
-    for variant in variants.into_iter() {
+    for variant in enumeration.variants.iter() {
+        let variant_ident = &variant.ident;
+
+        if variant.attributes.fallback {
+            // the fallback variant binds its raw repr integer and writes it
+            // verbatim — exactly the repr width, no discriminant.
+            let value = if repr.is_ident("u8") || repr.is_ident("i8") {
+                quote! { slice[0] = *value; }
+            } else {
+                quote! {
+                    slice.copy_from_slice(&<#repr>::to_le_bytes(*value));
+                }
+            };
+
+            discriminants.push(quote! {
+                #ident :: #variant_ident ( value ) => { #value }
+            });
+            continue;
+        }
+
         let (_, discriminant) = if let Some(discriminant) = variant.discriminant.as_ref() {
             discriminant
         } else {
             panic!("should always be a discriminant")
         };
-        let variant = &variant.ident;
 
         let value = if repr.is_ident("u8") {
             quote! { slice[0] = #discriminant; }
@@ -812,7 +938,7 @@ where
 
         discriminants.push({
             quote! {
-                #ident :: #variant => { #value }
+                #ident :: #variant_ident => { #value }
             }
         });
     }
@@ -829,7 +955,7 @@ fn expand_write_to_slice_data_enumeration(
     ident: &syn::Ident,
     enumeration: &PackedEnum,
 ) -> TokenStream {
-    let variants = expand_write_to_slice_data_variants(repr, ident, &enumeration.variants);
+    let variants = expand_write_to_slice_data_variants(repr, ident, enumeration);
 
     quote! {
         fn unchecked_write_to_slice(&self, slice: &mut [u8]) {

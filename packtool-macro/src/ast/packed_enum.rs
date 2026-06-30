@@ -13,6 +13,7 @@ pub struct PackedEnum {
 }
 
 pub struct PackedVariant {
+    pub attributes: PackedAttributes,
     pub ident: syn::Ident,
     pub fields: Punctuated<PackedField, Token!(,)>,
     pub discriminant: Option<(syn::token::Eq, syn::Expr)>,
@@ -25,6 +26,15 @@ impl PackedEnum {
 
     pub fn only_unit_variants(&self) -> bool {
         self.variants.iter().all(|v| v.fields.is_empty())
+    }
+
+    /// the catch-all `#[packed(fallback)]` variant, if one is declared.
+    ///
+    /// A fallback variant carries the raw `#[repr(...)]` integer for any
+    /// discriminant that does not match a known unit variant, making the
+    /// packed enum forward-compatible.
+    pub fn fallback_variant(&self) -> Option<&PackedVariant> {
+        self.variants.iter().find(|v| v.attributes.fallback)
     }
 
     pub fn equivalent_to_packed_unit(&self) -> bool {
@@ -53,8 +63,8 @@ impl Parse for PackedEnum {
 
 impl Parse for PackedVariant {
     fn parse(input: ParseStream) -> Result<Self> {
-        // parse and discard variant attributes to consume the tokens
-        let _attributes: PackedAttributes = input.parse()?;
+        // capture the per-variant attributes (e.g. `#[packed(fallback)]`)
+        let attributes: PackedAttributes = input.parse()?;
         let ident = input.parse()?;
 
         let fields = if input.peek(syn::token::Brace) {
@@ -78,6 +88,7 @@ impl Parse for PackedVariant {
         };
 
         Ok(Self {
+            attributes,
             ident,
             fields,
             discriminant,

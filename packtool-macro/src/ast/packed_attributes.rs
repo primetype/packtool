@@ -9,6 +9,9 @@ pub struct PackedAttributes {
     pub value: Option<ValueType>,
     pub repr: Option<syn::Path>,
     pub accessor: AccessorType,
+    /// set by `#[packed(fallback)]` on an enum variant: marks the catch-all
+    /// variant that an unknown discriminant decodes into.
+    pub fallback: bool,
 }
 
 #[derive(Default)]
@@ -28,9 +31,14 @@ enum PackedAttribute {
     Value(ValueType),
     Repr(syn::Path),
     Accessor(proc_macro2::Span, AccessorType),
+    Fallback(proc_macro2::Span),
 }
 
-const ATTRIBUTE_LIST: &[&str] = &[PackedAttribute::VALUE, PackedAttribute::ACCESSOR];
+const ATTRIBUTE_LIST: &[&str] = &[
+    PackedAttribute::VALUE,
+    PackedAttribute::ACCESSOR,
+    PackedAttribute::FALLBACK,
+];
 
 impl ValueType {
     pub fn span(&self) -> proc_macro2::Span {
@@ -70,6 +78,13 @@ impl PackedAttributes {
                         result.accessor = accessor;
                     }
                 }
+                PackedAttribute::Fallback(span) => {
+                    if result.fallback {
+                        return Err(syn::Error::new(span, "fallback was already set"));
+                    } else {
+                        result.fallback = true;
+                    }
+                }
             }
         }
 
@@ -95,6 +110,7 @@ impl Parse for PackedAttributes {
 impl PackedAttribute {
     const VALUE: &'static str = "value";
     const ACCESSOR: &'static str = "accessor";
+    const FALLBACK: &'static str = "fallback";
 
     fn from(meta: syn::Meta) -> Result<Vec<Self>> {
         match meta {
@@ -158,6 +174,9 @@ impl PackedAttribute {
                 } else {
                     Err(syn::Error::new_spanned(list, "unexpected meta list"))
                 }
+            }
+            syn::Meta::Path(path) if !is_repr && path.is_ident(Self::FALLBACK) => {
+                Ok(Self::Fallback(path.span()))
             }
             meta @ syn::Meta::Path(_) if !is_repr => {
                 Err(syn::Error::new_spanned(meta, "unexpected meta path"))

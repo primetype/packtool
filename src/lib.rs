@@ -103,6 +103,122 @@ pub enum ThisOrThat {
 }
 ```
 
+A single catch-all `#[packed(fallback)]` variant is the one supported
+data-carrying shape: an unknown discriminant decodes into it instead of
+erroring, making the packed enum forward-compatible. The fallback is a
+single-field tuple variant with no discriminant whose field type is the
+`#[repr(...)]` integer, and it carries exactly the repr width on the wire:
+
+```
+use packtool::{Packed, View};
+
+#[derive(Packed, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+    #[packed(fallback)]
+    Other(u16),
+}
+
+# fn test() -> Result<(), packtool::Error> {
+let view: View<'_, Selector> = View::try_from_slice(&[0x99, 0x99])?;
+assert_eq!(view.unpack(), Selector::Other(0x9999));
+# Ok(()) }
+# test().unwrap();
+# assert_eq!(Selector::SIZE, 2);
+```
+
+The fallback exists for **decode** of genuinely-unknown values only. Because a
+known variant and `Fallback(known_value)` encode to the same wire bytes,
+hand-constructing the fallback with a value that equals a known discriminant
+does not round-trip: decoding those bytes always yields the known unit variant.
+For the `Selector` above, `Packet::pack(&Selector::Other(0x0001)).unpack()`
+decodes back to `Selector::AdminRoot`, not `Selector::Other(0x0001)`. This never
+arises from decoding — decode only ever produces the fallback for
+genuinely-unknown values, which always round-trip — so it is a misuse caveat,
+not a correctness issue:
+
+```
+use packtool::{Packed, Packet};
+
+#[derive(Packed, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+    #[packed(fallback)]
+    Other(u16),
+}
+
+// a genuinely-unknown value round-trips through the fallback:
+assert_eq!(
+    Packet::pack(&Selector::Other(0x9999)).unpack(),
+    Selector::Other(0x9999),
+);
+// but a fallback holding a known discriminant canonicalises on decode:
+assert_eq!(
+    Packet::pack(&Selector::Other(0x0001)).unpack(),
+    Selector::AdminRoot,
+);
+```
+
+A fallback whose field type does not match the `#[repr(...)]` is rejected:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+#[repr(u16)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+    #[packed(fallback)]
+    Other(u32),
+}
+```
+
+More than one `#[packed(fallback)]` variant is rejected:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+#[repr(u16)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+    #[packed(fallback)]
+    Other(u16),
+    #[packed(fallback)]
+    Another(u16),
+}
+```
+
+A fallback variant carrying more than one field is rejected:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+#[repr(u16)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+    #[packed(fallback)]
+    Other(u16, u16),
+}
+```
+
+A fallback variant that declares a discriminant is rejected:
+
+```compile_fail
+use packtool::Packed;
+
+#[derive(Packed)]
+#[repr(u16)]
+pub enum Selector {
+    AdminRoot = 0x0001,
+    #[packed(fallback)]
+    Other(u16) = 5,
+}
+```
+
 Unions cannot be packed and are rejected at compile time:
 
 ```compile_fail
