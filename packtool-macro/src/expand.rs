@@ -906,8 +906,12 @@ fn expand_write_to_slice_data_variants(
         if variant.attributes.fallback {
             // the fallback variant binds its raw repr integer and writes it
             // verbatim — exactly the repr width, no discriminant.
-            let value = if repr.is_ident("u8") || repr.is_ident("i8") {
+            let value = if repr.is_ident("u8") {
                 quote! { slice[0] = *value; }
+            } else if repr.is_ident("i8") {
+                // Reinterpret the signed byte as `u8` for the single-byte slot —
+                // the inverse of the `slice[0] as i8` read.
+                quote! { slice[0] = *value as u8; }
             } else {
                 quote! {
                     slice.copy_from_slice(&<#repr>::to_le_bytes(*value));
@@ -929,7 +933,11 @@ fn expand_write_to_slice_data_variants(
         let value = if repr.is_ident("u8") {
             quote! { slice[0] = #discriminant; }
         } else if repr.is_ident("i8") {
-            quote! { slice[0] = #discriminant as i8; }
+            // Store the signed discriminant as its `u8` byte (the inverse of the
+            // `slice[0] as i8` read); `as i8` here would assign an `i8` to a `u8`.
+            // Parenthesised so a negative discriminant emits `(-5) as u8`, not
+            // `-(5 as u8)` — the latter negates a `u8` (E0600).
+            quote! { slice[0] = (#discriminant) as u8; }
         } else {
             quote! {
                 slice.copy_from_slice(&<#repr>::to_le_bytes(#discriminant));

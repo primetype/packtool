@@ -123,3 +123,31 @@ fn without_fallback_unknown_discriminant_is_rejected() {
     internal_mk_test!(NoFallback => (NoFallback::AdminRoot, &[0x01, 0x00]));
     internal_mk_test!(NoFallback => ( "Invalid discriminant for enum::NoFallback, received 39321 while expecting one of: [ 1, ]" &[0x99, 0x99] ));
 }
+
+// A `#[repr(i8)]` enum exercises the single-byte SIGNED write path: the
+// discriminant (and a fallback value) is stored as its `u8` byte — the inverse of
+// the `slice[0] as i8` read — so `i8` reprs round-trip. (Before the write fix the
+// path assigned an `i8` straight into the `u8` slot and failed to compile.) A
+// fallback value may itself be negative (`Other(-1)`); negative *discriminant
+// literals* are a separate, exotic case and are not exercised here.
+#[derive(Packed, Debug, PartialEq, Eq)]
+#[repr(i8)]
+enum SignedSelector {
+    Lo = 1,
+    Hi = 7,
+    #[packed(fallback)]
+    Other(i8),
+}
+
+#[test]
+fn i8_repr_discriminants_and_fallback_round_trip() {
+    assert_eq!(<SignedSelector as Packed>::SIZE, 1);
+
+    internal_mk_test!(SignedSelector => (SignedSelector::Lo, &[1u8]));
+    internal_mk_test!(SignedSelector => (SignedSelector::Hi, &[7u8]));
+
+    // an unknown value decodes into the fallback and round-trips, including a
+    // negative one: `-1 as u8` = 0xFF, read back as `0xFF as i8` = -1.
+    internal_mk_test!(SignedSelector => (SignedSelector::Other(-1), &[0xFFu8]));
+    internal_mk_test!(SignedSelector => (SignedSelector::Other(42), &[42u8]));
+}
